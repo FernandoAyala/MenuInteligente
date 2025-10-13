@@ -1,0 +1,45 @@
+import dotenv from 'dotenv';
+
+// Cargar variables de entorno
+dotenv.config();
+
+/**
+ * Configuración centralizada de variables de entorno
+ */
+export const config = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT || '3000', 10),
+  
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID || '',
+    credentialsPath: process.env.GOOGLE_APPLICATION_CREDENTIALS || '',
+    emulatorHost: process.env.FIREBASE_EMULATOR_HOST,
+  },
+  
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+  },
+  
+  allowedOrigins: process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',') 
+    : ['http://localhost:5173', 'http://localhost:3000'],
+} as const;
+
+/**
+ * Validar que las variables de entorno críticas estén configuradas
+ */
+export function validateEnvConfig(): void {
+  const requiredVars = [
+    'FIREBASE_PROJECT_ID',
+    'OPENAI_API_KEY',
+  ];
+
+  const missingVars = requiredVars.filter((varName) => !process.env[varName]);
+
+  if (missingVars.length > 0) {
+    throw new Error(
+      `Faltan variables de entorno requeridas: ${missingVars.join(', ')}\n` +
+      'Por favor, configura tu archivo .env basándote en .env.example'
+    );
+  }
+}
