@@ -1,6 +1,6 @@
 # Configuración de Firebase
 
-Este directorio debe contener tu archivo `serviceAccountKey.json` de Firebase.
+Este el directorio 'config' debe contener tu archivo `serviceAccountKey.json` de Firebase.
 
 ## Cómo obtener el Service Account Key:
 

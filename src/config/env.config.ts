@@ -19,6 +19,14 @@ export const config = {
   openai: {
     apiKey: process.env.OPENAI_API_KEY || '',
   },
+
+  gemini: {
+    apiKey: process.env.GEMINI_API_KEY || '',
+  },
+
+  llm: {
+    defaultProvider: process.env.LLM_DEFAULT_PROVIDER || 'openai',
+  },
   
   allowedOrigins: process.env.ALLOWED_ORIGINS 
     ? process.env.ALLOWED_ORIGINS.split(',') 
@@ -31,8 +39,11 @@ export const config = {
 export function validateEnvConfig(): void {
   const requiredVars = [
     'FIREBASE_PROJECT_ID',
-    'OPENAI_API_KEY',
   ];
+
+  // Al menos uno de los proveedores de LLM debe estar configurado
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+  const hasGemini = !!process.env.GEMINI_API_KEY;
 
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
@@ -40,6 +51,13 @@ export function validateEnvConfig(): void {
     throw new Error(
       `Faltan variables de entorno requeridas: ${missingVars.join(', ')}\n` +
       'Por favor, configura tu archivo .env basándote en .env.example'
+    );
+  }
+
+  if (!hasOpenAI && !hasGemini) {
+    throw new Error(
+      'Debes configurar al menos un proveedor de LLM (OPENAI_API_KEY o GEMINI_API_KEY)\n' +
+      'Por favor, agrega al menos una API key en tu archivo .env'
     );
   }
 }

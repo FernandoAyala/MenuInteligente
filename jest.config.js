@@ -16,4 +16,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   verbose: true,
+  // Timeouts más largos para permitir delays entre tests (rate limiting)
+  testTimeout: 30000, // 30 segundos por test
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
 };

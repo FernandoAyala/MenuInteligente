@@ -25,14 +25,20 @@ app.use(express.urlencoded({ extended: true }));
 // Inicializar Firebase
 initializeFirebase();
 
+// Importar rutas
+import llmRoutes from './routes/llm.routes';
+
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', (_req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     service: 'Menu Inteligente API' 
   });
 });
+
+// Rutas de la API
+app.use('/api/llm', llmRoutes);
 
 // Socket.io connection handling
 io.on('connection', (socket) => {

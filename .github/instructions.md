@@ -60,7 +60,7 @@
 - Monitoring: Logs básicos + health check endpoint
 
 # IA
-- Proveedor: OpenAI
+- Proveedor: OpenAI / Gemini
 - NLU/NLG: GPT-4o-mini (balanceando costo/latencia para MVP)
 - Estrategia MVP: Prompt engineering + filtrado por reglas (sin embeddings inicialmente)
 - Funciones: Extracción de intenciones + generación de respuestas conversacionales + justificaciones de recomendaciones
@@ -72,6 +72,7 @@
 - Clases en PascalCase
 - Constantes en Mayúsculas
 - Comentarios y documentación en Español
+- Documentación en la carpeta './docs'
 
 # Idioma
 - Responde siempre en Español
