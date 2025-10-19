@@ -5,13 +5,21 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "seed": "ts-node src/scripts/seed-menu.ts",
-    "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "test": "jest",
-    "test:watch": "jest --watch"
+    "server:dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "server:build": "tsc",
+    "server:start": "node dist/index.js",
+    "server:seed": "ts-node src/scripts/seed-menu.ts",
+    "server:lint": "eslint . --ext .ts",
+    "server:format": "prettier --write \"src/**/*.ts\"",
+    "server:test": "jest",
+    "server:test:watch": "jest --watch",
+
+    "client:dev": "vite",
+    "client:build": "tsc && vite build",
+    "client:preview": "vite preview",
+    "client:lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "client:test": "jest",
+    "client:test:watch": "jest --watch"
   },
   "keywords": [
     "chatbot",
@@ -29,7 +37,12 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "openai": "^4.24.1",
-    "@google/genai": "^0.3.0"
+    "@google/genai": "^0.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@tanstack/react-query": "^5.8.4",
+    "lucide-react": "^0.292.0",
+    "clsx": "^2.0.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -37,14 +50,28 @@
     "@types/jest": "^29.5.11",
     "@types/node": "^20.11.0",
     "@types/supertest": "^6.0.2",
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
+    "@vitejs/plugin-react": "^4.1.1",
+    "autoprefixer": "^10.4.16",
     "eslint": "^8.56.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.4",
     "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+  "ts-jest": "^29.1.1",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/user-event": "^14.5.1",
+    "identity-obj-proxy": "^3.0.0",
+    "postcss": "^8.4.31",
     "prettier": "^3.2.4",
+    "tailwindcss": "^3.3.5",
     "supertest": "^6.3.4",
-    "ts-jest": "^29.1.1",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vite": "^4.5.0"
   }
 }
