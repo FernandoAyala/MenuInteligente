@@ -27,6 +27,7 @@ initializeFirebase();
 
 // Importar rutas
 import llmRoutes from './routes/llm.routes';
+import recommendationsRoutes from './routes/recommendations.route';
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -39,6 +40,7 @@ app.get('/health', (_req, res) => {
 
 // Rutas de la API
 app.use('/api/llm', llmRoutes);
+app.use('/api/recommendations', recommendationsRoutes);
 
 // Socket.io connection handling
 io.on('connection', (socket) => {

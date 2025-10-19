@@ -97,6 +97,29 @@ export class MenuItemRepository {
       throw new Error(`No se encontraron datos para el documento ${doc.id}`);
     }
 
+    // Manejar createdAt: puede ser Timestamp de Firestore o Date de JS
+    let createdAt: Date;
+    if (data.createdAt) {
+      // Si tiene el método toDate (es un Timestamp de Firestore)
+      if (typeof data.createdAt.toDate === 'function') {
+        createdAt = data.createdAt.toDate();
+      } 
+      // Si ya es una instancia de Date
+      else if (data.createdAt instanceof Date) {
+        createdAt = data.createdAt;
+      }
+      // Si es un objeto con seconds/nanoseconds (Timestamp serializado)
+      else if (data.createdAt._seconds !== undefined) {
+        createdAt = new Date(data.createdAt._seconds * 1000);
+      }
+      // Fallback: intentar crear Date desde el valor
+      else {
+        createdAt = new Date(data.createdAt);
+      }
+    } else {
+      createdAt = new Date();
+    }
+
     return {
       id: doc.id,
       name: data.name,
@@ -110,7 +133,7 @@ export class MenuItemRepository {
       isGlutenFree: data.isGlutenFree,
       allergens: data.allergens || [],
       available: data.available,
-      createdAt: data.createdAt?.toDate() || new Date(),
+      createdAt,
     };
   }
 }

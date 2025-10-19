@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Sistema de Recomendaciones</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .test-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin: 5px;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102,126,234,0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .response {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .success { color: #4caf50; }
+        .error { color: #f44336; }
+        .warning { color: #ff9800; }
+        .recommendation-card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .dish-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .score {
+            display: inline-block;
+            background: #4caf50;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .breakdown {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .breakdown-item {
+            background: #f5f5f5;
+            padding: 8px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .safety-badge {
+            display: inline-block;
+            background: #4caf50;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin: 2px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        label {
+            font-weight: 600;
+            color: #333;
+            display: block;
+            margin-top: 10px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍽️ Motor de Recomendaciones Inteligente</h1>
+        <p class="subtitle">Epic #34 - Sistema de Recomendaciones con IA</p>
+
+        <!-- Health Check -->
+        <div class="test-section">
+            <h2>1️⃣ Health Check</h2>
+            <p>Verifica que el servicio esté operativo</p>
+            <button onclick="testHealth()">🔍 Verificar Estado del Servicio</button>
+            <div id="healthResponse"></div>
+        </div>
+
+        <!-- Recomendaciones Básicas -->
+        <div class="test-section">
+            <h2>2️⃣ Recomendaciones Básicas</h2>
+            <p>Sin filtros - Muestra las mejores opciones disponibles</p>
+            <button onclick="testBasicRecommendations()">✨ Obtener Recomendaciones</button>
+            <div id="basicResponse"></div>
+        </div>
+
+        <!-- Recomendaciones con Filtros -->
+        <div class="test-section">
+            <h2>3️⃣ Recomendaciones Personalizadas</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Alergias (separadas por coma):</label>
+                    <input type="text" id="allergies" placeholder="shellfish, nuts">
+                    
+                    <label>Restricciones Dietarias:</label>
+                    <select id="diet" multiple size="3">
+                        <option value="vegetarian">Vegetariano</option>
+                        <option value="vegan">Vegano</option>
+                        <option value="gluten-free">Sin Gluten</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Presupuesto Mínimo (ARS):</label>
+                    <input type="number" id="budgetMin" value="0">
+                    
+                    <label>Presupuesto Máximo (ARS):</label>
+                    <input type="number" id="budgetMax" value="15000">
+                </div>
+            </div>
+            <button onclick="testFilteredRecommendations()">🎯 Generar Recomendaciones Filtradas</button>
+            <div id="filteredResponse"></div>
+        </div>
+
+        <!-- Test de Seguridad CRÍTICO -->
+        <div class="test-section">
+            <h2>4️⃣ Test de Seguridad (CRÍTICO) 🚨</h2>
+            <p>Verifica que NUNCA se recomienden platos con alérgenos peligrosos</p>
+            <button onclick="testSafety()">🔒 Test de Seguridad Alimentaria</button>
+            <div id="safetyResponse"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api/recommendations';
+
+        async function testHealth() {
+            const responseDiv = document.getElementById('healthResponse');
+            responseDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Verificando...</p></div>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    responseDiv.innerHTML = `
+                        <div class="response">
+                            <span class="success">✅ SERVICIO OPERATIVO</span>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="response">
+                            <span class="error">❌ SERVICIO CON PROBLEMAS</span>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="response">
+                        <span class="error">❌ ERROR DE CONEXIÓN</span>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        async function testBasicRecommendations() {
+            const responseDiv = document.getElementById('basicResponse');
+            responseDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generando recomendaciones...</p></div>';
+            
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        allergies: [],
+                        dietaryRestrictions: [],
+                        preferences: {}
+                    })
+                });
+                
+                const data = await response.json();
+                displayRecommendations(data, responseDiv);
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="response">
+                        <span class="error">❌ ERROR</span>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        async function testFilteredRecommendations() {
+            const responseDiv = document.getElementById('filteredResponse');
+            responseDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Generando recomendaciones personalizadas...</p></div>';
+            
+            const allergiesInput = document.getElementById('allergies').value;
+            const allergies = allergiesInput ? allergiesInput.split(',').map(a => a.trim()) : [];
+            
+            const dietSelect = document.getElementById('diet');
+            const dietaryRestrictions = Array.from(dietSelect.selectedOptions).map(opt => opt.value);
+            
+            const budgetMin = parseInt(document.getElementById('budgetMin').value) || 0;
+            const budgetMax = parseInt(document.getElementById('budgetMax').value) || 50000;
+            
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        allergies,
+                        dietaryRestrictions,
+                        budget: { min: budgetMin, max: budgetMax },
+                        preferences: {
+                            mealType: ['main_course'],
+                            favoriteIngredients: ['pasta', 'tomato']
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                displayRecommendations(data, responseDiv);
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="response">
+                        <span class="error">❌ ERROR</span>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        async function testSafety() {
+            const responseDiv = document.getElementById('safetyResponse');
+            responseDiv.innerHTML = '<div class="loading"><div class="spinner"></div><p>Ejecutando test de seguridad...</p></div>';
+            
+            try {
+                // Test con alergia a mariscos
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        allergies: ['mariscos', 'shellfish'],
+                        dietaryRestrictions: [],
+                        preferences: {}
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success && data.data.length > 0) {
+                    // Verificar que ninguno contenga mariscos
+                    const hasDangerousDish = data.data.some(rec => 
+                        rec.dish.allergens && (
+                            rec.dish.allergens.includes('mariscos') ||
+                            rec.dish.allergens.includes('shellfish')
+                        )
+                    );
+                    
+                    if (hasDangerousDish) {
+                        responseDiv.innerHTML = `
+                            <div class="response">
+                                <span class="error">❌ TEST FALLIDO - PLATO PELIGROSO DETECTADO</span>
+                                <p>El sistema recomendó un plato con alérgenos declarados!</p>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>
+                            </div>
+                        `;
+                    } else {
+                        responseDiv.innerHTML = `
+                            <div class="response">
+                                <span class="success">✅ TEST DE SEGURIDAD APROBADO</span>
+                                <p>Ninguna recomendación contiene alérgenos peligrosos</p>
+                                ${displayRecommendationsHTML(data)}
+                            </div>
+                        `;
+                    }
+                } else {
+                    responseDiv.innerHTML = `
+                        <div class="response">
+                            <span class="warning">⚠️ Sin recomendaciones disponibles</span>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                responseDiv.innerHTML = `
+                    <div class="response">
+                        <span class="error">❌ ERROR</span>
+                        <pre>${error.message}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        function displayRecommendations(data, responseDiv) {
+            if (data.success && data.data.length > 0) {
+                responseDiv.innerHTML = `
+                    <div class="response">
+                        <span class="success">✅ ${data.count} Recomendaciones Generadas</span>
+                        ${displayRecommendationsHTML(data)}
+                    </div>
+                `;
+            } else {
+                responseDiv.innerHTML = `
+                    <div class="response">
+                        <span class="warning">⚠️ ${data.error || 'Sin recomendaciones disponibles'}</span>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
+            }
+        }
+
+        function displayRecommendationsHTML(data) {
+            return data.data.map(rec => `
+                <div class="recommendation-card">
+                    <div class="dish-name">${rec.rank}. ${rec.dish.name}</div>
+                    <div class="score">Score: ${rec.score.toFixed(1)}</div>
+                    <p><strong>Descripción:</strong> ${rec.dish.description}</p>
+                    <p><strong>Precio:</strong> $${rec.dish.price} ${rec.dish.currency}</p>
+                    <p><strong>Justificación:</strong> ${rec.justification}</p>
+                    
+                    <div class="breakdown">
+                        <div class="breakdown-item">
+                            <div>Safety</div>
+                            <strong>${rec.scoreBreakdown.safety.toFixed(0)}</strong>
+                        </div>
+                        <div class="breakdown-item">
+                            <div>Budget</div>
+                            <strong>${rec.scoreBreakdown.budgetFit.toFixed(0)}</strong>
+                        </div>
+                        <div class="breakdown-item">
+                            <div>Preferences</div>
+                            <strong>${rec.scoreBreakdown.preferences.toFixed(0)}</strong>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <strong>Safety Checks:</strong><br>
+                        ${rec.safetyChecks.map(check => 
+                            `<span class="safety-badge">${check}</span>`
+                        ).join(' ')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Auto-ejecutar health check al cargar
+        window.onload = () => {
+            testHealth();
+        };
+    </script>
+</body>
+</html>
