@@ -27,8 +27,8 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
 
-  const itemsPerView = 2.5; // Mostrar 2.5 items por vista en mobile
-  const maxIndex = Math.max(0, items.length - Math.ceil(itemsPerView));
+  // const itemsPerView = 1.5; // Mostrar 1.5 items por vista para que se vean completos
+  const maxIndex = Math.max(0, items.length - 1); // Permitir navegar hasta el último item
 
   const scrollToIndex = (index: number) => {
     if (carouselRef.current) {
@@ -61,7 +61,7 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
         
-        {items.length > itemsPerView && (
+        {items.length > 1 && (
           <div className="flex gap-2">
             <button
               onClick={handlePrevious}
@@ -93,13 +93,13 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
       {/* Carrusel */}
       <div 
         ref={carouselRef}
-        className="flex gap-3 overflow-x-auto scrollbar-hide pb-2"
+        className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 pr-6"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex-shrink-0 w-64"
+            className="flex-shrink-0 w-64 sm:w-72"
           >
             <DishCard
               menuItem={item}
@@ -115,7 +115,7 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
       </div>
 
       {/* Indicadores de posición */}
-      {items.length > itemsPerView && (
+      {items.length > 1 && (
         <div className="flex justify-center gap-1 mt-3">
           {Array.from({ length: maxIndex + 1 }, (_, index) => (
             <button

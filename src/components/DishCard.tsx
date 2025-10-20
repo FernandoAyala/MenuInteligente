@@ -61,7 +61,7 @@ const DishCard: React.FC<DishCardProps> = ({
 
   return (
     <div 
-      className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105 ${className}`}
+      className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105 flex flex-col min-h-[320px] ${className}`}
       onClick={handleCardClick}
     >
       {/* Imagen del plato */}
@@ -76,13 +76,13 @@ const DishCard: React.FC<DishCardProps> = ({
       )}
       
       {/* Contenido */}
-      <div className="p-4">
+      <div className="p-4 flex flex-col flex-1">
         {/* Header con nombre y precio */}
         <div className="flex justify-between items-start mb-2">
-          <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">
+          <h3 className="font-semibold text-gray-900 text-sm line-clamp-2 flex-1 pr-2">
             {menuItem.name}
           </h3>
-          <span className="font-bold text-accent-green text-sm ml-2 flex-shrink-0">
+          <span className="font-bold text-accent-green text-sm flex-shrink-0">
             {formatPrice(menuItem.price, menuItem.currency)}
           </span>
         </div>
@@ -124,52 +124,57 @@ const DishCard: React.FC<DishCardProps> = ({
           </div>
         )}
 
-        {/* Botones de acción según variante */}
-        {variant === 'chat' && menuItem.available ? (
-          <div className="space-y-2">
-            {/* Botones principales para chat */}
-            <div className="flex gap-2">
-              <button
-                onClick={handleInterested}
-                className="flex-1 bg-accent-blue text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors"
-              >
-                Me interesa
-              </button>
-              <button
-                onClick={handleViewAlternatives}
-                className="flex-1 bg-gray-500 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-gray-600 transition-colors"
-              >
-                Ver alternativas
-              </button>
-            </div>
-            {/* Botón agregar al carrito */}
-            {showAddButton && (
-              <button
-                onClick={handleAddToCart}
-                className="w-full bg-accent-green text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-              >
-                <ShoppingCart className="w-4 h-4" />
-                Añadir al carrito
-              </button>
-            )}
-          </div>
-        ) : showAddButton && menuItem.available ? (
-          /* Botón estándar para vista normal */
-          <button
-            onClick={handleAddToCart}
-            className="w-full bg-accent-green text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
-          >
-            <ShoppingCart className="w-4 h-4" />
-            Agregar al pedido
-          </button>
-        ) : null}
+        {/* Spacer para empujar botones al fondo */}
+        <div className="flex-1"></div>
 
-        {/* Estado no disponible */}
-        {!menuItem.available && (
-          <div className="w-full bg-gray-200 text-gray-500 py-2 px-4 rounded-lg text-sm font-medium text-center">
-            No disponible
-          </div>
-        )}
+        {/* Botones de acción según variante */}
+        <div className="mt-auto">
+          {variant === 'chat' && menuItem.available ? (
+            <div className="space-y-2">
+              {/* Botones principales para chat */}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleInterested}
+                  className="flex-1 bg-accent-blue text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Me interesa
+                </button>
+                <button
+                  onClick={handleViewAlternatives}
+                  className="flex-1 bg-gray-500 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-gray-600 transition-colors"
+                >
+                  Ver alternativas
+                </button>
+              </div>
+              {/* Botón agregar al carrito */}
+              {showAddButton && (
+                <button
+                  onClick={handleAddToCart}
+                  className="w-full bg-accent-green text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  Añadir al carrito
+                </button>
+              )}
+            </div>
+          ) : showAddButton && menuItem.available ? (
+            /* Botón estándar para vista normal */
+            <button
+              onClick={handleAddToCart}
+              className="w-full bg-accent-green text-white py-2 px-4 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors flex items-center justify-center gap-2"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              Agregar al pedido
+            </button>
+          ) : null}
+
+          {/* Estado no disponible */}
+          {!menuItem.available && (
+            <div className="w-full bg-gray-200 text-gray-500 py-2 px-4 rounded-lg text-sm font-medium text-center">
+              No disponible
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
