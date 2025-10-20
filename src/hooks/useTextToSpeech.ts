@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface TextToSpeechHook {
   speak: (text: string) => void;
@@ -40,13 +40,20 @@ export const useTextToSpeech = (): TextToSpeechHook => {
   }, [selectedVoice]);
 
   // Cargar voces cuando estén disponibles
-  useState(() => {
+  useEffect(() => {
     console.log('🎤 Inicializando Text-to-Speech...');
     loadVoices();
     if (speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = loadVoices;
     }
-  });
+
+    // Cleanup
+    return () => {
+      if (speechSynthesis.onvoiceschanged) {
+        speechSynthesis.onvoiceschanged = null;
+      }
+    };
+  }, [loadVoices]);
 
   const speak = useCallback((text: string) => {
     console.log('🔊 Iniciando síntesis de voz:', { text, rate, pitch, volume });

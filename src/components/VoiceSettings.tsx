@@ -32,16 +32,16 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ isOpen, onClose })
           <h3 className="text-lg font-semibold text-gray-900">Configuración de Voz</h3>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-full"
+            className="p-2 hover:bg-gray-200 rounded-full transition-colors border border-gray-300 hover:border-gray-400"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 text-gray-800 hover:text-gray-900" />
           </button>
         </div>
 
         <div className="space-y-6">
           {/* Selección de voz */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-900 mb-2">
               Voz
             </label>
             <select
@@ -50,13 +50,25 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ isOpen, onClose })
                 const voice = voices.find(v => v.name === e.target.value);
                 if (voice) setSelectedVoice(voice);
               }}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-3 border-2 border-gray-400 rounded-md bg-white text-gray-900 font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-500 transition-colors"
+              style={{ 
+                fontSize: '14px',
+                color: '#1f2937',
+                backgroundColor: '#ffffff'
+              }}
             >
-              <option value="">Seleccionar voz...</option>
+              <option value="" className="text-gray-500 bg-white">
+                Seleccionar voz...
+              </option>
               {voices
                 .filter(voice => voice.lang.startsWith('es') || voice.lang.startsWith('en'))
                 .map((voice) => (
-                  <option key={voice.name} value={voice.name}>
+                  <option 
+                    key={voice.name} 
+                    value={voice.name}
+                    className="text-gray-900 bg-white font-medium"
+                    style={{ color: '#1f2937', backgroundColor: '#ffffff' }}
+                  >
                     {voice.name} ({voice.lang})
                   </option>
                 ))
@@ -66,7 +78,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ isOpen, onClose })
 
           {/* Velocidad */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-900 mb-2">
               Velocidad: {rate.toFixed(1)}x
             </label>
             <input
@@ -82,7 +94,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ isOpen, onClose })
 
           {/* Tono */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-900 mb-2">
               Tono: {pitch.toFixed(1)}
             </label>
             <input
@@ -98,7 +110,7 @@ export const VoiceSettings: React.FC<VoiceSettingsProps> = ({ isOpen, onClose })
 
           {/* Volumen */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-bold text-gray-900 mb-2">
               Volumen: {Math.round(volume * 100)}%
             </label>
             <input
