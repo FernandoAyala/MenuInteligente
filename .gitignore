@@ -12,6 +12,8 @@ build/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
 
 # Firebase credentials
 config/serviceAccountKey.json
@@ -39,8 +41,27 @@ yarn-error.log*
 # Testing
 coverage/
 .nyc_output/
+test-results/
+*.test.log
+
+# Azure and deployment artifacts
+.azure/
+azure-pipelines.yml.bak
+deployment-logs/
 
 # Misc
 .cache/
 temp/
 tmp/
+
+# Security - Never commit these
+*.key
+*.pem
+*.p12
+*.pfx
+service-account*.json
+secrets.json
+
+# Docker
+docker-compose.override.yml
+.dockerignore

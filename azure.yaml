@@ -1,0 +1,45 @@
+# Azure Developer CLI Configuration para Menu Inteligente
+# Para más información: https://aka.ms/azd
+
+name: menu-inteligente
+metadata:
+  template: menu-inteligente-typescript
+  
+services:
+  api:
+    project: .
+    host: containerapp
+    language: ts
+    
+infra:
+  provider: bicep
+  
+pipeline:
+  provider: azdo
+  
+hooks:
+  prebuild:
+    shell: sh
+    run: |
+      echo "Installing dependencies..."
+      npm ci
+      
+  postbuild: 
+    shell: sh
+    run: |
+      echo "Running TypeScript build..."
+      npm run build
+      echo "Build completed successfully"
+      
+  predeploy:
+    shell: sh  
+    run: |
+      echo "Running pre-deployment checks..."
+      npm run test
+      
+  postdeploy:
+    shell: sh
+    run: |
+      echo "Deployment completed!"
+      echo "Running health check..."
+      curl -f $AZD_SERVICE_API_ENDPOINT_URL/health || echo "Health check failed"
