@@ -28,6 +28,10 @@ initializeFirebase();
 // Importar rutas
 import llmRoutes from './routes/llm.routes';
 import recommendationsRoutes from './routes/recommendations.route';
+import chatRoutes from './routes/chat.routes';
+
+// Importar middleware de error handling
+import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware';
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
@@ -39,8 +43,13 @@ app.get('/health', (_req, res) => {
 });
 
 // Rutas de la API
+app.use('/api/chat', chatRoutes); // Epic #60: API Conversacional
 app.use('/api/llm', llmRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
+
+// Middleware de manejo de errores (DEBE ir al final)
+app.use(notFoundHandler); // 404 para rutas no encontradas
+app.use(errorHandler); // Global error handler
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
