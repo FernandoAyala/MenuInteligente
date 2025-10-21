@@ -21,11 +21,16 @@ module.exports = {
       animation: {
         'typing': 'typing 1.5s ease-in-out infinite',
         'bounce-subtle': 'bounce 2s infinite',
+        'fadeIn': 'fadeIn 0.3s ease-in-out',
       },
       keyframes: {
         typing: {
           '0%, 60%, 100%': { transform: 'translateY(0)' },
           '30%': { transform: 'translateY(-10px)' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(-10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         }
       }
     },

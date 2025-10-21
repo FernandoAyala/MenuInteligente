@@ -16,7 +16,7 @@ export class OpenAIProvider implements ILLMProvider {
   private client: OpenAI;
   private defaultModel: string;
 
-  constructor(apiKey?: string, defaultModel: string = 'gpt-4o-mini') {
+  constructor(apiKey?: string, defaultModel: string = 'gpt-4.1-nano-2025-04-14') {
     const key = apiKey || config.openai.apiKey;
     
     if (!key) {

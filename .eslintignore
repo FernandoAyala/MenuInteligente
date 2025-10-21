@@ -1,0 +1,33 @@
+# Compiled output
+dist/
+dist-frontend/
+build/
+
+# Dependencies
+node_modules/
+
+# Frontend files (React/Vite)
+src/components/
+src/hooks/
+src/test/
+src/styles/
+src/App.tsx
+src/main.tsx
+src/types/
+src/mocks/
+src/examples/
+
+# Test files
+**/*.test.ts
+**/*.test.tsx
+**/__tests__/
+
+# Config files
+vite.config.ts
+jest.config.js
+*.config.js
+
+# Other
+coverage/
+.next/
+.cache/

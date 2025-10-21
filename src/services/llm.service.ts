@@ -143,7 +143,7 @@ Sé amable, profesional y conciso. Usa emojis moderadamente para un tono amigabl
     const systemPrompt: LLMMessage = {
       role: MessageRole.SYSTEM,
       content: `Eres un experto en recomendaciones gastronómicas.
-Basándote en las preferencias del cliente y el menú disponible, recomienda 3-5 platos.
+Basándote en las preferencias del cliente y el menú disponible, recomienda 2-3 platos.
 
 Preferencias del cliente:
 ${JSON.stringify(preferences, null, 2)}

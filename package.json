@@ -4,9 +4,12 @@
   "description": "Sistema de mozo virtual conversacional con IA",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only --project tsconfig.server.json src/index.ts",
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\" --names \"backend,frontend\" --prefix-colors \"blue,magenta\"",
     "build": "tsc --project tsconfig.server.json",
+    "build:frontend": "vite build",
+    "build:all": "npm run build && npm run build:frontend",
     "start": "node dist/index.js",
+    "start:prod": "NODE_ENV=production node dist/index.js",
     "seed": "ts-node src/scripts/seed-menu.ts",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
@@ -34,7 +37,7 @@
     "prebuild": "npm run typecheck && npm run lint",
     "prestart": "npm run build",
     "pretest": "npm run typecheck",
-    "server:dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "server:dev": "ts-node-dev --respawn --transpile-only --project tsconfig.server.json src/index.ts",
     "server:build": "tsc --project tsconfig.server.json",
     "server:start": "node dist/index.js",
     "server:seed": "ts-node src/scripts/seed-menu.ts",
@@ -60,6 +63,7 @@
   "dependencies": {
     "@google/genai": "^0.3.0",
     "@tanstack/react-query": "^5.8.4",
+    "axios": "^1.12.2",
     "clsx": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -70,6 +74,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io": "^4.6.1",
+    "socket.io-client": "^4.8.1",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -88,6 +93,7 @@
     "@typescript-eslint/parser": "^6.19.0",
     "@vitejs/plugin-react": "^4.1.1",
     "autoprefixer": "^10.4.16",
+    "concurrently": "^9.2.1",
     "eslint": "^8.56.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.4",

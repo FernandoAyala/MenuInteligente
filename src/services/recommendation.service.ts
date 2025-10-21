@@ -191,22 +191,23 @@ export class RecommendationService {
 
     for (const dish of dishes) {
       const rejectionReasons: string[] = [];
-      let conflictingAllergens: string[] = [];
-      let conflictingRestrictions: string[] = [];
+      const conflictingAllergens: string[] = [];
+      const conflictingRestrictions: string[] = [];
 
       // VERIFICACIÓN 1: Alérgenos (CRÍTICO)
       if (dish.allergens && dish.allergens.length > 0) {
         const dishAllergens = dish.allergens.map((a: string) => a.toLowerCase());
         
-        conflictingAllergens = allergyLowercase.filter(userAllergen =>
+        const foundAllergens = allergyLowercase.filter(userAllergen =>
           dishAllergens.some((dishAllergen: string) =>
             dishAllergen.includes(userAllergen) || userAllergen.includes(dishAllergen)
           )
         );
 
-        if (conflictingAllergens.length > 0) {
+        if (foundAllergens.length > 0) {
+          conflictingAllergens.push(...foundAllergens);
           rejectionReasons.push(
-            `Contiene alérgenos: ${conflictingAllergens.join(', ')}`
+            `Contiene alérgenos: ${foundAllergens.join(', ')}`
           );
         }
       }
@@ -458,20 +459,23 @@ export class RecommendationService {
       score += (3 - spicyDiff) * 5;
     }
 
-    // Match de tipo de comida
+    // Match de tipo de comida y categorías - basado en descripción y nombre del plato
+    // El LLM debe extraer características semánticas, no comparar strings de categorías
     if (preferences.mealType && preferences.mealType.length > 0) {
+      const dishText = `${dish.name} ${dish.description} ${dish.category}`.toLowerCase();
       const matchesType = preferences.mealType.some((type: string) =>
-        dish.category.toLowerCase().includes(type.toLowerCase())
+        dishText.includes(type.toLowerCase())
       );
-      if (matchesType) score += 15;
+      if (matchesType) score += 10;
     }
 
-    // Match de categorías preferidas
+    // Categorías preferidas - matching semántico
     if (preferences.preferredCategories && preferences.preferredCategories.length > 0) {
-      const matchesCategory = preferences.preferredCategories.some((cat: string) =>
-        dish.category.toLowerCase().includes(cat.toLowerCase())
+      const dishText = `${dish.name} ${dish.description} ${dish.category}`.toLowerCase();
+      const matchesPreference = preferences.preferredCategories.some((pref: string) =>
+        dishText.includes(pref.toLowerCase())
       );
-      if (matchesCategory) score += 15;
+      if (matchesPreference) score += 10;
     }
 
     // Ingredientes favoritos
@@ -644,11 +648,25 @@ Score:`;
       };
     }
 
+    // VARIEDAD: Tomar de un pool más amplio con aleatoriedad ponderada
+    // Los mejores scores tienen más probabilidad, pero hay variación
+    const topCandidatesCount = Math.min(Math.max(maxRecommendations * 4, 10), scoredDishes.length);
+    const topCandidates = scoredDishes.slice(0, topCandidatesCount);
+    
+    // Aplicar pequeña aleatoriedad ponderada por score
+    const withRandomness = topCandidates.map(item => ({
+      ...item,
+      adjustedScore: item.totalScore * (0.85 + Math.random() * 0.3) // 85%-115% del score original
+    }));
+    
+    // Re-ordenar por score ajustado
+    withRandomness.sort((a, b) => b.adjustedScore - a.adjustedScore);
+
     const selected: typeof scoredDishes = [];
     const discarded: Array<{ dish: any; reason: string }> = [];
     const categoryCounts: Record<string, number> = {};
 
-    for (const item of scoredDishes) {
+    for (const item of withRandomness) {
       if (selected.length >= maxRecommendations) break;
 
       const category = item.dish.category;
@@ -751,7 +769,7 @@ Score:`;
           isVegan: item.dish.isVegan,
           isVegetarian: item.dish.isVegetarian,
           isGlutenFree: item.dish.isGlutenFree,
-          allergens: item.dish.allergens,
+          allergens: item.dish.allergens || [], // Asegurar que siempre sea un array
           available: item.dish.available,
         },
         score: item.totalScore,

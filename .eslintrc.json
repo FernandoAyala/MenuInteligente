@@ -11,10 +11,22 @@
   "parserOptions": {
     "ecmaVersion": 2020,
     "sourceType": "module",
-    "project": "./tsconfig.json"
+    "project": "./tsconfig.server.json"
   },
   "plugins": [
     "@typescript-eslint"
+  ],
+  "ignorePatterns": [
+    "src/services/api/**",
+    "src/components/**",
+    "src/hooks/**",
+    "src/types/**",
+    "src/vite-env.d.ts",
+    "src/App.tsx",
+    "src/main.tsx",
+    "dist/**",
+    "dist-frontend/**",
+    "node_modules/**"
   ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "warn",

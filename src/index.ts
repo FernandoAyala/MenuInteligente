@@ -1,5 +1,6 @@
 import express, { Application } from 'express';
 import cors from 'cors';
+import path from 'path';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { config } from './config/env.config';
@@ -42,14 +43,65 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// Root endpoint - información de la API
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    name: 'Menu Inteligente API',
+    version: '1.0.0',
+    environment: config.nodeEnv,
+    endpoints: {
+      health: '/health',
+      chat: '/api/chat',
+      llm: '/api/llm',
+      recommendations: '/api/recommendations'
+    },
+    frontend: config.nodeEnv === 'production' 
+      ? 'Serving static files' 
+      : 'Running on http://localhost:5173'
+  });
+});
+
 // Rutas de la API
 app.use('/api/chat', chatRoutes); // Epic #60: API Conversacional
 app.use('/api/llm', llmRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
 
-// Middleware de manejo de errores (DEBE ir al final)
-app.use(notFoundHandler); // 404 para rutas no encontradas
-app.use(errorHandler); // Global error handler
+// Servir archivos estáticos del frontend (PRODUCCIÓN)
+// En producción, el frontend compilado estará en /dist-frontend
+if (config.nodeEnv === 'production') {
+  const frontendPath = path.join(__dirname, '../dist-frontend');
+  
+  // Servir archivos estáticos
+  app.use(express.static(frontendPath));
+  
+  // 404 solo para rutas API no encontradas
+  app.use('/api/*', notFoundHandler);
+  
+  // SPA fallback - todas las rutas no-API devuelven index.html
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+} else {
+  // En desarrollo, el frontend corre en Vite (puerto 5173)
+  console.log('💻 Modo desarrollo: Frontend en http://localhost:5173');
+  
+  // 404 para rutas API no encontradas
+  app.use('/api/*', notFoundHandler);
+  
+  // Cualquier otra ruta no-API en desarrollo devuelve info
+  app.all('*', (req, res) => {
+    res.status(404).json({
+      error: 'Not Found',
+      message: `Route ${req.method} ${req.path} not found`,
+      hint: config.nodeEnv === 'development' 
+        ? 'Frontend is running on http://localhost:5173' 
+        : 'Invalid route'
+    });
+  });
+}
+
+// Global error handler (SIEMPRE al final)
+app.use(errorHandler);
 
 // Socket.io connection handling
 io.on('connection', (socket) => {

@@ -116,7 +116,7 @@ const DishCard: React.FC<DishCardProps> = ({
         </div>
 
         {/* Alergenos */}
-        {menuItem.allergens.length > 0 && (
+        {menuItem.allergens && menuItem.allergens.length > 0 && (
           <div className="mb-3">
             <p className="text-xs text-gray-500">
               Contiene: {menuItem.allergens.join(', ')}

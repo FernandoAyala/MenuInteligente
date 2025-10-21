@@ -4,6 +4,7 @@ import {
   CreateSessionDto,
   UpdateSessionDto,
 } from '../models/session.model';
+import { v4 as uuidv4 } from 'uuid';
 
 const COLLECTION_NAME = 'conversationSessions';
 
@@ -24,7 +25,10 @@ export class SessionRepository {
    */
   async create(data: CreateSessionDto): Promise<ConversationSession> {
     const now = new Date();
-    const docRef = await this.collection.add({
+    const sessionId = uuidv4(); // Generar UUID para compatibilidad con validación
+    
+    const docRef = this.collection.doc(sessionId);
+    await docRef.set({
       ...data,
       startedAt: now,
       updatedAt: now,

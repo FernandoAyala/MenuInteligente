@@ -1,173 +1,279 @@
-import { useCallback, useEffect, useState } from 'react';
+/**
+ * Hook personalizado para gestión de WebSocket con Socket.io
+ * @module hooks/useWebSocket
+ */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { ChatMessage, ConnectionStatus } from '../types';
 
-// Simulación de WebSocket para desarrollo/testing
-export interface MockWebSocket {
-  send: (data: string) => void;
-  close: () => void;
-  addEventListener: (event: string, handler: (data: any) => void) => void;
-  removeEventListener: (event: string, handler: (data: any) => void) => void;
-  readyState: number;
+/**
+ * Evento de mensaje del chat
+ */
+export interface ChatMessageEvent {
+  sessionId: string;
+  message: string;
+  timestamp: string;
+  type?: 'user' | 'bot';
 }
 
-class MockWebSocketClient implements MockWebSocket {
-  readyState: number = 1; // OPEN
-  private eventHandlers: Map<string, ((data: any) => void)[]> = new Map();
-  private connectionStatus: ConnectionStatus = 'connected';
+/**
+ * Evento de respuesta del bot
+ */
+export interface BotResponseEvent {
+  sessionId: string;
+  message: string;
+  timestamp: string;
+  metadata?: {
+    model?: string;
+    tokensUsed?: number;
+    processingTime?: number;
+  };
+  menuItems?: any[];
+}
 
-  constructor(private onStatusChange?: (status: ConnectionStatus) => void) {
-    this.simulateConnection();
-  }
+/**
+ * Evento de error del WebSocket
+ */
+export interface WebSocketErrorEvent {
+  message: string;
+  code?: string;
+  timestamp: string;
+}
 
-  private simulateConnection() {
-    // Simular cambios de conexión ocasionales
-    setInterval(() => {
-      if (Math.random() > 0.98) { // 2% de probabilidad
-        this.connectionStatus = 'reconnecting';
-        this.readyState = 0; // CONNECTING
-        this.onStatusChange?.('reconnecting');
-        
-        setTimeout(() => {
-          this.connectionStatus = 'connected';
-          this.readyState = 1; // OPEN
-          this.onStatusChange?.('connected');
-        }, 1000 + Math.random() * 2000);
-      }
-    }, 5000);
-  }
+/**
+ * Opciones de configuración del WebSocket
+ */
+export interface UseWebSocketOptions {
+  /** URL del servidor WebSocket */
+  url?: string;
+  /** Namespace de Socket.io */
+  namespace?: string;
+  /** Auto-conectar al montar el componente */
+  autoConnect?: boolean;
+  /** Auto-reconectar en caso de desconexión */
+  reconnection?: boolean;
+  /** Intentos de reconexión */
+  reconnectionAttempts?: number;
+  /** Delay entre reconexiones (ms) */
+  reconnectionDelay?: number;
+  /** Timeout de conexión (ms) */
+  timeout?: number;
+  /** Callbacks de eventos */
+  onConnect?: () => void;
+  onDisconnect?: (reason: string) => void;
+  onError?: (error: Error) => void;
+  onMessage?: (data: BotResponseEvent) => void;
+}
 
-  send(data: string) {
-    if (this.readyState !== 1) {
+/**
+ * Hook useWebSocket - Gestiona conexión Socket.io para chat en tiempo real
+ */
+export const useWebSocket = (options: UseWebSocketOptions = {}) => {
+  const {
+    url = import.meta.env.VITE_WS_URL || 'http://localhost:3000',
+    namespace = '/chat',
+    autoConnect = true,
+    reconnection = true,
+    reconnectionAttempts = 5,
+    reconnectionDelay = 1000,
+    timeout = 10000,
+    onConnect,
+    onDisconnect,
+    onError,
+    onMessage,
+  } = options;
+
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>(
+    autoConnect ? 'connecting' : 'disconnected'
+  );
+  const [error, setError] = useState<Error | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastMessage, setLastMessage] = useState<BotResponseEvent | null>(null);
+
+  const socketRef = useRef<Socket | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+
+  /**
+   * Conectar al servidor WebSocket
+   */
+  const connect = useCallback(() => {
+    if (socketRef.current?.connected) {
+      console.log('🔌 WebSocket ya está conectado');
+      return;
+    }
+
+    console.log('� Conectando WebSocket:', `${url}${namespace}`);
+    setConnectionStatus('connecting');
+    setError(null);
+
+    try {
+      const socket = io(`${url}${namespace}`, {
+        reconnection,
+        reconnectionAttempts,
+        reconnectionDelay,
+        timeout,
+        transports: ['websocket', 'polling'],
+      });
+
+      socketRef.current = socket;
+
+      // Evento: Conexión exitosa
+      socket.on('connect', () => {
+        console.log('✅ WebSocket conectado:', socket.id);
+        setConnectionStatus('connected');
+        setIsConnected(true);
+        setError(null);
+        reconnectAttemptsRef.current = 0;
+        onConnect?.();
+      });
+
+      // Evento: Desconexión
+      socket.on('disconnect', (reason) => {
+        console.log('❌ WebSocket desconectado:', reason);
+        setConnectionStatus('disconnected');
+        setIsConnected(false);
+        onDisconnect?.(reason);
+
+        if (reason === 'io server disconnect') {
+          socket.connect();
+        }
+      });
+
+      // Evento: Error de conexión
+      socket.on('connect_error', (err) => {
+        console.error('❌ Error de conexión WebSocket:', err.message);
+        setConnectionStatus('disconnected');
+        setError(err);
+        onError?.(err);
+      });
+
+      // Evento: Intento de reconexión
+      socket.on('reconnect_attempt', (attemptNumber) => {
+        console.log(`🔄 Intento de reconexión #${attemptNumber}`);
+        setConnectionStatus('reconnecting');
+        reconnectAttemptsRef.current = attemptNumber;
+      });
+
+      // Evento: Reconexión exitosa
+      socket.on('reconnect', (attemptNumber) => {
+        console.log(`✅ Reconectado después de ${attemptNumber} intentos`);
+        setConnectionStatus('connected');
+        setIsConnected(true);
+        setError(null);
+        reconnectAttemptsRef.current = 0;
+      });
+
+      // Evento: Fallo de reconexión
+      socket.on('reconnect_failed', () => {
+        console.error('❌ Fallo al reconectar');
+        setConnectionStatus('disconnected');
+        setError(new Error('No se pudo reconectar al servidor'));
+      });
+
+      // Evento: Mensaje del bot
+      socket.on('bot:response', (data: BotResponseEvent) => {
+        console.log('� Mensaje del bot recibido:', data);
+        setLastMessage(data);
+        onMessage?.(data);
+      });
+
+      // Evento: Error del servidor
+      socket.on('error', (errorData: WebSocketErrorEvent) => {
+        console.error('❌ Error del servidor:', errorData);
+        const error = new Error(errorData.message);
+        setError(error);
+        onError?.(error);
+      });
+
+    } catch (err) {
+      console.error('❌ Error al crear socket:', err);
+      const error = err instanceof Error ? err : new Error('Error desconocido');
+      setConnectionStatus('disconnected');
+      setError(error);
+      onError?.(error);
+    }
+  }, [
+    url,
+    namespace,
+    reconnection,
+    reconnectionAttempts,
+    reconnectionDelay,
+    timeout,
+    onConnect,
+    onDisconnect,
+    onError,
+    onMessage,
+  ]);
+
+  /**
+   * Desconectar del servidor WebSocket
+   */
+  const disconnect = useCallback(() => {
+    if (socketRef.current) {
+      console.log('🔌 Desconectando WebSocket...');
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setConnectionStatus('disconnected');
+      setIsConnected(false);
+    }
+  }, []);
+
+  /**
+   * Enviar mensaje al servidor
+   */
+  const sendMessage = useCallback((sessionId: string, message: string, context?: any) => {
+    if (!socketRef.current?.connected) {
+      console.error('❌ WebSocket no está conectado');
       throw new Error('WebSocket no está conectado');
     }
 
-    try {
-      const message = JSON.parse(data);
-      console.log('📤 Enviando mensaje:', message);
+    const payload: ChatMessageEvent = {
+      sessionId,
+      message,
+      timestamp: new Date().toISOString(),
+      type: 'user',
+    };
 
-      // Simular respuesta del servidor
-      setTimeout(() => {
-        this.triggerEvent('message', {
-          data: JSON.stringify({
-            type: 'response',
-            content: message.content,
-            timestamp: new Date().toISOString()
-          })
-        });
-      }, 500 + Math.random() * 1500);
+    console.log('📤 Enviando mensaje:', payload);
+    socketRef.current.emit('user:message', { ...payload, context });
 
-    } catch (error) {
-      console.error('Error al enviar mensaje:', error);
-    }
-  }
+    return payload;
+  }, []);
 
-  close() {
-    this.readyState = 3; // CLOSED
-    this.connectionStatus = 'disconnected';
-    this.onStatusChange?.('disconnected');
-    this.triggerEvent('close', {});
-  }
+  /**
+   * Reconectar manualmente
+   */
+  const reconnect = useCallback(() => {
+    disconnect();
+    setTimeout(() => connect(), 100);
+  }, [disconnect, connect]);
 
-  addEventListener(event: string, handler: (data: any) => void) {
-    if (!this.eventHandlers.has(event)) {
-      this.eventHandlers.set(event, []);
-    }
-    this.eventHandlers.get(event)!.push(handler);
-  }
-
-  removeEventListener(event: string, handler: (data: any) => void) {
-    const handlers = this.eventHandlers.get(event);
-    if (handlers) {
-      const index = handlers.indexOf(handler);
-      if (index > -1) {
-        handlers.splice(index, 1);
-      }
-    }
-  }
-
-  private triggerEvent(event: string, data: any) {
-    const handlers = this.eventHandlers.get(event);
-    if (handlers) {
-      handlers.forEach(handler => handler(data));
-    }
-  }
-}
-
-// Hook para manejar la conexión WebSocket
-export const useWebSocket = (url?: string) => {
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
-  const [socket, setSocket] = useState<MockWebSocket | null>(null);
-  const [lastMessage, setLastMessage] = useState<any>(null);
-
+  // Auto-conectar al montar si está habilitado
   useEffect(() => {
-    // En desarrollo usamos el mock, en producción sería WebSocket real
-    const mockSocket = new MockWebSocketClient(setConnectionStatus);
-    
-    const handleMessage = (event: any) => {
-      try {
-        const data = JSON.parse(event.data);
-        setLastMessage(data);
-        console.log('📨 Mensaje recibido:', data);
-      } catch (error) {
-        console.error('Error al procesar mensaje:', error);
-      }
-    };
-
-    const handleOpen = () => {
-      setConnectionStatus('connected');
-      console.log('🔗 WebSocket conectado');
-    };
-
-    const handleClose = () => {
-      setConnectionStatus('disconnected');
-      console.log('🔌 WebSocket desconectado');
-    };
-
-    const handleError = (error: any) => {
-      console.error('❌ Error de WebSocket:', error);
-      setConnectionStatus('disconnected');
-    };
-
-    mockSocket.addEventListener('message', handleMessage);
-    mockSocket.addEventListener('open', handleOpen);
-    mockSocket.addEventListener('close', handleClose);
-    mockSocket.addEventListener('error', handleError);
-
-    setSocket(mockSocket);
-    setConnectionStatus('connected');
+    if (autoConnect) {
+      connect();
+    }
 
     return () => {
-      mockSocket.removeEventListener('message', handleMessage);
-      mockSocket.removeEventListener('open', handleOpen);
-      mockSocket.removeEventListener('close', handleClose);
-      mockSocket.removeEventListener('error', handleError);
-      mockSocket.close();
-    };
-  }, [url]);
-
-  const sendMessage = useCallback((message: any) => {
-    if (socket && connectionStatus === 'connected') {
-      try {
-        socket.send(JSON.stringify(message));
-      } catch (error) {
-        console.error('Error al enviar mensaje:', error);
+      if (socketRef.current) {
+        console.log('🧹 Limpiando WebSocket al desmontar');
+        disconnect();
       }
-    }
-  }, [socket, connectionStatus]);
-
-  const reconnect = useCallback(() => {
-    if (socket) {
-      socket.close();
-      // El efecto se encargará de recrear la conexión
-    }
-  }, [socket]);
+    };
+  }, [autoConnect, connect, disconnect]);
 
   return {
     connectionStatus,
+    isConnected,
+    error,
     lastMessage,
+    reconnectAttempts: reconnectAttemptsRef.current,
+    socket: socketRef.current,
+    connect,
+    disconnect,
     sendMessage,
     reconnect,
-    isConnected: connectionStatus === 'connected'
   };
 };
 

@@ -2,6 +2,25 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { MenuItem } from '../types';
 import DishCard from './DishCard';
+import RecommendedDishCard, { RecommendedMenuItem } from './RecommendedDishCard';
+
+interface FoodCarouselProps {
+  items: MenuItem[];
+  onItemClick?: (item: MenuItem) => void;
+  onAddToCart?: (item: MenuItem) => void;
+  onInterested?: (item: MenuItem) => void;
+  onViewAlternatives?: (item: MenuItem) => void;
+  title?: string;
+  className?: string;
+  variant?: 'default' | 'chat';
+}
+
+/**
+ * Verifica si un item tiene información de recomendación
+ */
+const isRecommendedItem = (item: MenuItem): item is RecommendedMenuItem => {
+  return 'score' in item && typeof (item as any).score === 'number';
+};
 
 interface FoodCarouselProps {
   items: MenuItem[];
@@ -55,6 +74,12 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
     return null;
   }
 
+  // Debug: verificar que todos los items tengan ID único
+  const hasValidIds = items.every(item => item && item.id);
+  if (!hasValidIds) {
+    console.warn('FoodCarousel: Some items are missing IDs', items);
+  }
+
   return (
     <div className={`w-full ${className}`}>
       {/* Título y controles */}
@@ -96,22 +121,38 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
         className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 pr-6"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className="flex-shrink-0 w-64 sm:w-72"
-          >
-            <DishCard
-              menuItem={item}
-              onClick={onItemClick}
-              onAddToCart={onAddToCart}
-              onInterested={onInterested}
-              onViewAlternatives={onViewAlternatives}
-              variant={variant}
-              className="h-full"
-            />
-          </div>
-        ))}
+        {items.map((item) => {
+          const isRecommended = isRecommendedItem(item);
+          
+          return (
+            <div
+              key={item.id}
+              className="flex-shrink-0 w-64 sm:w-72"
+            >
+              {isRecommended ? (
+                <RecommendedDishCard
+                  menuItem={item}
+                  onClick={onItemClick}
+                  onAddToCart={onAddToCart}
+                  onInterested={onInterested}
+                  onViewAlternatives={onViewAlternatives}
+                  variant={variant}
+                  className="h-full"
+                />
+              ) : (
+                <DishCard
+                  menuItem={item}
+                  onClick={onItemClick}
+                  onAddToCart={onAddToCart}
+                  onInterested={onInterested}
+                  onViewAlternatives={onViewAlternatives}
+                  variant={variant}
+                  className="h-full"
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Indicadores de posición */}

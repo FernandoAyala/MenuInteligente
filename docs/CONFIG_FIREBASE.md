@@ -1,6 +1,6 @@
 # Configuración de Firebase
 
-Este el directorio 'config' debe contener tu archivo `serviceAccountKey.json` de Firebase.
+En el directorio 'config' debe contener tu archivo `serviceAccountKey.json` de Firebase.
 
 ## Cómo obtener el Service Account Key:
 
@@ -14,20 +14,3 @@ Este el directorio 'config' debe contener tu archivo `serviceAccountKey.json` de
 
 ⚠️ **IMPORTANTE**: Este archivo contiene credenciales sensibles. Nunca lo subas a un repositorio público.
 El archivo ya está incluido en `.gitignore` para evitar commits accidentales.
-
-## Estructura esperada del archivo:
-
-```json
-{
-  "type": "service_account",
-  "project_id": "tu-proyecto-id",
-  "private_key_id": "...",
-  "private_key": "...",
-  "client_email": "...",
-  "client_id": "...",
-  "auth_uri": "...",
-  "token_uri": "...",
-  "auth_provider_x509_cert_url": "...",
-  "client_x509_cert_url": "..."
-}
-```

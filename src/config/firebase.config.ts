@@ -1,5 +1,7 @@
 import admin from 'firebase-admin';
 import { config } from './env.config';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 let isInitialized = false;
 
@@ -22,7 +24,9 @@ export function initializeFirebase(): void {
     // Inicializar Firebase Admin
     if (config.firebase.credentialsPath) {
       // Usar service account credentials
-      const serviceAccount = require(`../../${config.firebase.credentialsPath}`);
+      const serviceAccountPath = join(__dirname, '../../', config.firebase.credentialsPath);
+      const serviceAccountContent = readFileSync(serviceAccountPath, 'utf8');
+      const serviceAccount = JSON.parse(serviceAccountContent);
       
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),

@@ -1,7 +1,8 @@
 import { Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { generateBotResponse, mockChatMessages, simulateTypingDelay } from '../mocks/chatData';
-import { ChatMessage, ConnectionStatus, MenuItem } from '../types';
+import { useChatService } from '../hooks/useChatService';
+import { useShoppingCart } from '../hooks/useWebSocket';
+import { ChatMessage, MenuItem } from '../types';
 import ConnectionStatusIndicator from './ConnectionStatusIndicator';
 import InputArea from './InputArea';
 import MessageBubble from './MessageBubble';
@@ -14,10 +15,36 @@ interface ChatContainerProps {
 }
 
 const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessages);
+  // Hook de chat con API real (HTTP fallback)
+  const {
+    messages,
+    sessionId,
+    isLoading,
+    error: chatError,
+    connectionStatus,
+    sendMessage: sendChatMessage,
+  } = useChatService({
+    enableWebSocket: false, // WebSocket no implementado en backend aún
+    onBotMessage: (message) => {
+      console.log('📨 Nuevo mensaje del bot:', message);
+      setIsTyping(false);
+    },
+    onError: (error) => {
+      console.error('❌ Error en chat:', error);
+      setIsTyping(false);
+    },
+  });
+
+  // Hook de carrito de compras
+  const {
+    cartItems,
+    addToCart,
+    getTotalItems,
+    getTotalPrice,
+    clearCart,
+  } = useShoppingCart();
+
   const [isTyping, setIsTyping] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connected');
-  const [cart, setCart] = useState<MenuItem[]>([]);
   const [autoVoiceEnabled, setAutoVoiceEnabled] = useState<boolean>(true);
   const lastAutoSpokenMessageId = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -32,68 +59,22 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  // Simular cambios de conexión
+  // Mostrar error si existe
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (Math.random() > 0.95) { // 5% de probabilidad de cambio de estado
-        const statuses: ConnectionStatus[] = ['connected', 'reconnecting', 'connected'];
-        const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-        setConnectionStatus(randomStatus);
-        
-        if (randomStatus === 'reconnecting') {
-          setTimeout(() => setConnectionStatus('connected'), 2000);
-        }
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
+    if (chatError) {
+      console.error('❌ Error de chat:', chatError);
+      // Aquí podrías mostrar un toast o notificación al usuario
+    }
+  }, [chatError]);
 
   const handleSendMessage = async (content: string) => {
-    // Crear mensaje del usuario
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      content,
-      type: 'user',
-      timestamp: new Date(),
-      status: 'sending'
-    };
+    if (!content.trim()) return;
 
-    setMessages(prev => [...prev, userMessage]);
-
-    // Simular envío
-    setTimeout(() => {
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === userMessage.id 
-            ? { ...msg, status: 'sent' }
-            : msg
-        )
-      );
-    }, 500);
-
-    // Mostrar indicador de escritura
     setIsTyping(true);
 
     try {
-      // Simular respuesta del bot
-      await simulateTypingDelay();
-      const botResponse = generateBotResponse(content);
-      
-      setIsTyping(false);
-      setMessages(prev => [...prev, botResponse]);
-
-      // Simular entrega del mensaje del usuario
-      setTimeout(() => {
-        setMessages(prev => 
-          prev.map(msg => 
-            msg.id === userMessage.id 
-              ? { ...msg, status: 'delivered' }
-              : msg
-          )
-        );
-      }, 1000);
-
+      await sendChatMessage(content);
+      // isTyping se desactiva en el callback onBotMessage
     } catch (error) {
       setIsTyping(false);
       console.error('Error al enviar mensaje:', error);
@@ -101,27 +82,17 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   };
 
   const handleMenuItemClick = (item: MenuItem) => {
-    // Crear mensaje automático cuando se hace clic en un plato
+    // Enviar mensaje automático cuando se hace clic en un plato
     const message = `Me interesa el ${item.name}. ¿Podrías contarme más sobre este plato?`;
     handleSendMessage(message);
   };
 
   const handleAddToCart = (item: MenuItem) => {
-    setCart(prev => [...prev, item]);
+    addToCart(item, 1);
     
     // Mensaje automático de confirmación
     const message = `He agregado "${item.name}" al pedido. ¡Genial elección!`;
-    const confirmationMessage: ChatMessage = {
-      id: `bot-${Date.now()}`,
-      content: message,
-      type: 'bot',
-      timestamp: new Date(),
-      status: 'sent'
-    };
-    
-    setTimeout(() => {
-      setMessages(prev => [...prev, confirmationMessage]);
-    }, 500);
+    handleSendMessage(message);
   };
 
   const handleItemInterested = (item: MenuItem) => {
@@ -138,120 +109,85 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
 
   const handleVoiceCommand = (action: string, data?: any, response?: string) => {
     console.log('🎤 Comando de voz recibido:', { action, data, response });
-    
-    // Mostrar respuesta inmediata si existe
-    if (response) {
-      const botMessage: ChatMessage = {
-        id: `bot-voice-${Date.now()}`,
-        content: response,
-        type: 'bot',
-        timestamp: new Date(),
-        status: 'sent'
-      };
-      setMessages(prev => [...prev, botMessage]);
-    }
 
     // Ejecutar acción específica
     switch (action) {
       case 'SHOW_MENU':
-        // Simular mostrar menú completo
-        setTimeout(() => {
-          const menuResponse = generateBotResponse('mostrar todo el menú');
-          const menuMessage: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            content: menuResponse.content,
-            type: 'bot',
-            timestamp: new Date(),
-            status: 'sent',
-            menuItems: menuResponse.menuItems
-          };
-          setMessages(prev => [...prev, menuMessage]);
-        }, 1000);
+        handleSendMessage('Muéstrame todo el menú completo');
         break;
 
       case 'SHOW_CART':
-        if (cart.length === 0) {
-          const emptyCartMessage: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            content: '🛒 Tu carrito está vacío. ¿Te gustaría ver nuestro menú para elegir algo delicioso?',
-            type: 'bot',
-            timestamp: new Date(),
-            status: 'sent'
-          };
-          setTimeout(() => setMessages(prev => [...prev, emptyCartMessage]), 500);
+        if (getTotalItems() === 0) {
+          handleSendMessage('¿Qué tengo en mi carrito?');
         } else {
-          const cartSummary = cart.map(item => `• ${item.name} - $${item.price}`).join('\n');
-          const cartMessage: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            content: `🛒 En tu carrito tienes:\n\n${cartSummary}\n\nTotal: $${cart.reduce((sum, item) => sum + item.price, 0)}\n\n¿Quieres proceder al checkout o agregar algo más?`,
-            type: 'bot',
-            timestamp: new Date(),
-            status: 'sent'
-          };
-          setTimeout(() => setMessages(prev => [...prev, cartMessage]), 500);
+          const cartSummary = cartItems.map(item => 
+            `• ${item.menuItem.name} x${item.quantity} - $${item.menuItem.price * item.quantity}`
+          ).join('\n');
+          const total = getTotalPrice();
+          handleSendMessage(`Mi carrito actual:\n${cartSummary}\n\nTotal: $${total}`);
         }
         break;
 
       case 'CLEAR_CART':
-        setCart([]);
+        clearCart();
+        handleSendMessage('He vaciado mi carrito');
         break;
 
       case 'SHOW_VEGETARIAN':
+        handleSendMessage('Muéstrame opciones vegetarianas');
+        break;
+        
       case 'SHOW_VEGAN':
+        handleSendMessage('Muéstrame opciones veganas');
+        break;
+        
       case 'SHOW_GLUTEN_FREE':
+        handleSendMessage('Muéstrame opciones sin gluten');
+        break;
+        
       case 'SHOW_DESSERTS':
+        handleSendMessage('Muéstrame los postres');
+        break;
+        
       case 'SHOW_DRINKS':
+        handleSendMessage('Muéstrame las bebidas');
+        break;
+        
       case 'SHOW_PROMOTIONS':
-        // Simular búsqueda específica
-        setTimeout(() => {
-          const searchResponse = generateBotResponse(response || '');
-          const searchMessage: ChatMessage = {
-            id: `bot-${Date.now()}`,
-            content: searchResponse.content,
-            type: 'bot',
-            timestamp: new Date(),
-            status: 'sent',
-            menuItems: searchResponse.menuItems
-          };
-          setMessages(prev => [...prev, searchMessage]);
-        }, 1500);
+        handleSendMessage('¿Qué promociones tienen hoy?');
         break;
 
       case 'DIRECT_ORDER':
       case 'QUANTITY_ORDER':
-        // Buscar el item mencionado
         if (data?.item) {
-          setTimeout(() => {
-            const orderResponse = generateBotResponse(`buscar ${data.item}`);
-            const orderMessage: ChatMessage = {
-              id: `bot-${Date.now()}`,
-              content: orderResponse.content,
-              type: 'bot',
-              timestamp: new Date(),
-              status: 'sent',
-              menuItems: orderResponse.menuItems
-            };
-            setMessages(prev => [...prev, orderMessage]);
-          }, 1000);
+          const quantity = data.quantity || 1;
+          handleSendMessage(`Quiero ${quantity} ${data.item}`);
         }
         break;
 
       case 'SHOW_HELP':
-        // Respuesta de ayuda ya incluida en response
+        // El response ya viene con el mensaje de ayuda
+        if (response) {
+          handleSendMessage(response);
+        }
         break;
 
       case 'RESTART_CHAT':
-        setMessages(mockChatMessages);
-        setCart([]);
+        // Aquí podrías implementar lógica para reiniciar la sesión
+        clearCart();
+        handleSendMessage('Hola, quisiera empezar de nuevo');
         break;
 
       default:
         console.log('Acción no reconocida:', action);
+        if (response) {
+          handleSendMessage(response);
+        }
     }
   };
 
   const getTotalCartItems = () => {
-    return cart.length;
+    return getTotalItems();
   };
 
   const getConnectionIcon = () => {
@@ -365,7 +301,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         onSendMessage={handleSendMessage}
         onVoiceCommand={handleVoiceCommand}
         isTyping={isTyping}
-        disabled={connectionStatus === 'disconnected'}
+        disabled={false}
       />
     </div>
   );

@@ -18,6 +18,7 @@ export const INTENT_EXTRACTION_PROMPT = `Eres un asistente especializado en comp
 Tu tarea es analizar el mensaje del usuario y extraer información estructurada en formato JSON.
 
 INTENCIONES POSIBLES:
+- saludo: Usuario solo saluda (ej: "hola", "buenos días", "hey") SIN pedir nada más
 - consultar_menu: Usuario quiere ver opciones disponibles
 - recomendar: Usuario pide sugerencias
 - agregar_al_pedido: Usuario quiere ordenar algo específico
@@ -28,6 +29,11 @@ INTENCIONES POSIBLES:
 - consultar_restricciones: Usuario pregunta por opciones dietarias
 - queja_o_feedback: Usuario expresa insatisfacción o comentarios
 
+IMPORTANTE PARA SALUDOS:
+- Si el mensaje es SOLO un saludo sin ninguna otra petición, usa intent="saludo"
+- Ejemplos de saludo puro: "Hola", "Buenos días", "Hey", "Buenas tardes"
+- NO es saludo puro: "Hola, quiero vegetariano" (intent="recomendar"), "Buenas, qué hay en el menú" (intent="consultar_menu")
+
 ENTIDADES A EXTRAER (siempre en español):
 - dietaryRestrictions: Array de strings en español (ej: ["vegetariano", "vegano", "sin-gluten"])
 - allergens: Array de alérgenos mencionados en español (ej: ["nueces", "lácteos", "mariscos"])
@@ -35,8 +41,18 @@ ENTIDADES A EXTRAER (siempre en español):
 - dishesMetioned: Array de platos mencionados específicamente
 - quantity: Número de porciones/personas si se menciona
 - spicyLevel: String si menciona picante ("ninguno", "bajo", "medio", "alto")
-- mealType: String si especifica ("entrada", "principal", "postre", "bebida")
+- mealType: String si especifica tipo de comida ("entrada", "principal", "postre", "bebida")
 - preferences: Array de otras preferencias en español (ej: ["ligero", "abundante", "fresco", "tradicional"])
+
+IMPORTANTE SOBRE mealType:
+- "entrada", "aperitivo" → mealType="entrada"
+- "plato principal", "plato fuerte", "segundo" → mealType="principal"
+- "postre", "dulce" → mealType="postre"
+- "bebida", "trago" → mealType="bebida"
+- "acompañamiento", "guarnición" → mealType="acompañamiento"
+
+NO confundir con dietaryRestrictions:
+- "vegetariano", "vegano", "sin gluten" → dietaryRestrictions (NO mealType)
 
 ANÁLISIS DE CONTEXTO:
 - Detecta si es una pregunta o una acción
