@@ -3,13 +3,13 @@
  * Epic #34: Motor de Recomendaciones
  */
 
-import { Router, Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
 import { z } from 'zod';
-import { RecommendationService } from '../services/recommendation.service';
 import { RecommendationParams, UserPreferences } from '../interfaces/recommendation.interface';
 import { SpicyLevel } from '../models/menuItem.model';
+import { RecommendationService } from '../services/recommendation.service';
 
-const router = Router();
+const router: Router = Router();
 const recommendationService = new RecommendationService();
 
 // =============================================================================

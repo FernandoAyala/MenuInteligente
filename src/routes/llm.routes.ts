@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { LLMController } from '../controllers/llm.controller';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * Rutas para gestión de proveedores LLM

@@ -7,11 +7,11 @@
 
 import express from 'express';
 import { chatController } from '../controllers/chat.controller';
-import { validateChatRequest } from '../middleware/validation.middleware';
-import { chatRateLimiter } from '../middleware/rate-limit.middleware';
 import { asyncHandler } from '../middleware/error-handler.middleware';
+import { chatRateLimiter } from '../middleware/rate-limit.middleware';
+import { validateChatRequest } from '../middleware/validation.middleware';
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 /**
  * POST /api/chat
