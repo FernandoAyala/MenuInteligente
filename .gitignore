@@ -18,7 +18,7 @@ build/
 .env.development
 
 # Firebase credentials
-config/serviceAccountKey.json
+#config/serviceAccountKey.json
 firebase-debug.log
 firestore-debug.log
 
