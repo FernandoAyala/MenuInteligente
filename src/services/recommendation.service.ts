@@ -24,8 +24,8 @@ import {
   RankingResult,
 } from '../interfaces/recommendation.interface';
 import { MenuItemRepository } from '../repositories/menuItem.repository';
-import { EnhancedLLMService } from './enhanced-llm.service'; // Task #43: Integración LLM
-import { LLMProviderType, MessageRole, LLMMessage } from '../interfaces/llm.interface';
+// import { EnhancedLLMService } from './enhanced-llm.service'; // Task #43: Deshabilitado (semantic scoring off)
+import { LLMProviderType } from '../interfaces/llm.interface';
 import { RecommendationLogger } from '../utils/recommendation-logger';
 
 /**
@@ -34,16 +34,16 @@ import { RecommendationLogger } from '../utils/recommendation-logger';
 const DEFAULT_CONFIG: RecommendationServiceConfig = {
   maxRecommendations: 3,
   minRecommendations: 2,
-  enableSemanticScoring: true,
+  enableSemanticScoring: false, // DESHABILITADO: Para evitar rate limits
   llmTimeout: 10000,
   enableAuditLogs: true,
   defaultWeights: {
-    safety: 1.0,          // CRÍTICO: 100% peso (elimina platos inseguros)
-    dietaryMatch: 0.25,   // 25% peso
-    budgetFit: 0.15,      // 15% peso
-    preferencesMatch: 0.20, // 20% peso
-    semanticScore: 0.25,  // 25% peso
-    availability: 0.15,   // 15% peso
+    safety: 1.0,            // CRÍTICO: 100% peso (elimina platos inseguros)
+    dietaryMatch: 0.30,   // 30% peso (aumentado desde 25%)
+    budgetFit: 0.20,      // 20% peso (aumentado desde 15%)
+    preferencesMatch: 0.30, // 30% peso (aumentado desde 20%)
+    semanticScore: 0.0,   // 0% peso (deshabilitado)
+    availability: 0.20,   // 20% peso (aumentado desde 15%)
   },
   ensureDiversity: true,
   categoryRepetitionPenalty: 0.3,
@@ -54,7 +54,7 @@ const DEFAULT_CONFIG: RecommendationServiceConfig = {
  */
 export class RecommendationService {
   private menuRepository: MenuItemRepository;
-  private llmService: EnhancedLLMService;  // Task #43: Servicio LLM integrado
+  // private llmService: EnhancedLLMService;  // Task #43: Deshabilitado (semantic scoring off)
   private logger: RecommendationLogger;
   private config: RecommendationServiceConfig;
 
@@ -64,10 +64,13 @@ export class RecommendationService {
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.menuRepository = new MenuItemRepository();
-    this.llmService = llmProvider 
-      ? new EnhancedLLMService(llmProvider)
-      : new EnhancedLLMService(); // Task #43: Inicialización LLM
+    // this.llmService = llmProvider 
+    //   ? new EnhancedLLMService(llmProvider)
+    //   : new EnhancedLLMService(); // Task #43: Deshabilitado
     this.logger = new RecommendationLogger();
+    
+    // Evitar warning de parámetro no usado
+    void llmProvider;
   }
 
   // ==========================================================================
@@ -351,15 +354,8 @@ export class RecommendationService {
     // Score de preferencias
     const preferencesMatch = this.calculatePreferencesScore(dish, params.preferences);
 
-    // Score semántico (solo si está habilitado)
-    let semanticScore = 50; // Valor neutral por defecto
-    if (this.config.enableSemanticScoring) {
-      try {
-        semanticScore = await this.calculateSemanticScore(dish, params);
-      } catch (error) {
-        console.warn('Error calculating semantic score, using default:', error);
-      }
-    }
+    // Score semántico: DESHABILITADO para evitar rate limits
+    const semanticScore = 50; // Valor neutral fijo
 
     // Score de disponibilidad (ya filtrado, siempre 100)
     const availability = 100;
@@ -506,118 +502,6 @@ export class RecommendationService {
    * @param params Parámetros de recomendación con preferencias
    * @returns Score semántico de 0-100
    */
-  private async calculateSemanticScore(
-    dish: any,
-    params: RecommendationParams
-  ): Promise<number> {
-    // Si el scoring semántico está deshabilitado, retornar neutral
-    if (!this.config.enableSemanticScoring) {
-      return 50;
-    }
-
-    try {
-      // Construir contexto para el LLM
-      const userContext = this.buildUserContext(params);
-      const dishDescription = `${dish.name}: ${dish.description}. Precio: ${dish.currency} ${dish.price}. Categoría: ${dish.category}.`;
-
-      // Prompt para scoring semántico
-      const prompt = `Evalúa la relevancia de este plato para el usuario en una escala de 0-100.
-
-Usuario busca:
-${userContext}
-
-Plato:
-${dishDescription}
-
-Responde SOLO con un número del 0 al 100 representando la relevancia. 
-0 = totalmente irrelevante
-50 = neutral
-100 = perfectamente relevante
-
-Score:`;
-
-      // Usar el provider del LLM service directamente
-      const messages: LLMMessage[] = [
-        { 
-          role: MessageRole.SYSTEM, 
-          content: 'Eres un experto en recomendaciones gastronómicas. Evalúa la relevancia de platos según preferencias del usuario.' 
-        },
-        { role: MessageRole.USER, content: prompt }
-      ];
-
-      const response = await this.llmService['provider'].generateResponse(messages, {
-        temperature: 0.3,
-        maxTokens: 10
-      });
-
-      // Extraer número de la respuesta
-      const scoreMatch = response.content.match(/\d+/);
-      if (scoreMatch) {
-        const score = parseInt(scoreMatch[0], 10);
-        return Math.min(Math.max(score, 0), 100); // Clamp entre 0-100
-      }
-
-      return 50; // Fallback neutral
-    } catch (error) {
-      console.warn('Error calculating semantic score:', error);
-      return 50; // En caso de error, score neutral
-    }
-  }
-
-  /**
-   * Construye contexto del usuario para el LLM
-   */
-  private buildUserContext(params: RecommendationParams): string {
-    const lines: string[] = [];
-
-    // Preferencias de tipo de comida
-    if (params.preferences.mealType && params.preferences.mealType.length > 0) {
-      lines.push(`- Tipos de comida preferidos: ${params.preferences.mealType.join(', ')}`);
-    }
-
-    // Ingredientes favoritos
-    if (params.preferences.favoriteIngredients && params.preferences.favoriteIngredients.length > 0) {
-      lines.push(`- Ingredientes favoritos: ${params.preferences.favoriteIngredients.join(', ')}`);
-    }
-
-    // Ingredientes no deseados
-    if (params.preferences.dislikedIngredients && params.preferences.dislikedIngredients.length > 0) {
-      lines.push(`- Ingredientes no deseados: ${params.preferences.dislikedIngredients.join(', ')}`);
-    }
-
-    // Categorías preferidas
-    if (params.preferences.preferredCategories && params.preferences.preferredCategories.length > 0) {
-      lines.push(`- Categorías preferidas: ${params.preferences.preferredCategories.join(', ')}`);
-    }
-
-    // Nivel de picante
-    if (params.preferences.spicyLevel !== undefined) {
-      lines.push(`- Nivel de picante preferido: ${params.preferences.spicyLevel}`);
-    }
-
-    // Presupuesto
-    if (params.budget) {
-      lines.push(`- Presupuesto: ${params.budget.currency || 'ARS'} ${params.budget.min}-${params.budget.max}`);
-    }
-
-    // Contexto conversacional
-    if (params.context) {
-      if (params.context.emotionalState) {
-        lines.push(`- Estado de ánimo: ${params.context.emotionalState}`);
-      }
-      if (params.context.primaryIntent) {
-        lines.push(`- Intención: ${params.context.primaryIntent}`);
-      }
-    }
-
-    // Notas adicionales
-    if (params.preferences.additionalNotes) {
-      lines.push(`- Notas: ${params.preferences.additionalNotes}`);
-    }
-
-    return lines.length > 0 ? lines.join('\n') : 'Sin preferencias específicas';
-  }
-
   // ==========================================================================
   // TASK #42: RANKING Y DIVERSIDAD
   // ==========================================================================
