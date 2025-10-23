@@ -47,4 +47,16 @@ router.get(
   asyncHandler(chatController.healthCheck)
 );
 
+/**
+ * POST /api/chat/:sessionId/confirm-order
+ * Confirmar y crear una comanda desde el carrito de la sesión
+ * 
+ * Body: { tableNumber: number, customerNotes?: string }
+ */
+router.post(
+  '/:sessionId/confirm-order',
+  chatRateLimiter,
+  asyncHandler(chatController.confirmOrder)
+);
+
 export default router;

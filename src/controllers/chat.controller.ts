@@ -8,25 +8,26 @@
 
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from '../utils/logger';
-import { cacheService } from '../services/cache.service';
-import { metricsService, MetricType } from '../services/metrics.service';
-import { EnhancedLLMService } from '../services/enhanced-llm.service';
-import { RecommendationService } from '../services/recommendation.service';
-import { SessionRepository } from '../repositories/session.repository';
 import {
-  ChatRequest,
-  ChatResponse,
   ChatAction,
   ChatActionType,
-  PipelineStage,
+  ChatRequest,
+  ChatResponse,
   ChatResponseMetadata,
-  createChatAction
+  createChatAction,
+  PipelineStage
 } from '../interfaces/chat.interface';
 import { Recommendation } from '../interfaces/recommendation.interface';
 import { withTimeout } from '../middleware/error-handler.middleware';
 import { SpicyLevel } from '../models/menuItem.model';
-import { MessageRole, ConversationSlots } from '../models/session.model';
+import { ConversationSlots, MessageRole } from '../models/session.model';
+import { SessionRepository } from '../repositories/session.repository';
+import { cacheService } from '../services/cache.service';
+import { EnhancedLLMService } from '../services/enhanced-llm.service';
+import { metricsService, MetricType } from '../services/metrics.service';
+import { OrderService } from '../services/order.service';
+import { RecommendationService } from '../services/recommendation.service';
+import { logger } from '../utils/logger';
 
 /**
  * Controller para el endpoint de chat
@@ -35,10 +36,12 @@ export class ChatController {
   private llmService: EnhancedLLMService;
   private recommendationService: RecommendationService;
   private sessionRepository: SessionRepository;
+  private orderService: OrderService;
 
   constructor() {
     this.llmService = new EnhancedLLMService();
     this.sessionRepository = new SessionRepository();
+    this.orderService = new OrderService();
     
     // Desactivar semantic scoring para evitar rate limit de OpenAI
     // (cada recomendación haría N llamadas al LLM, una por cada plato)
@@ -579,6 +582,101 @@ export class ChatController {
       timestamp: new Date().toISOString(),
       uptime: process.uptime()
     });
+  };
+
+  /**
+   * Confirmar y crear una comanda desde el carrito de la sesión
+   * POST /api/chat/:sessionId/confirm-order
+   */
+  confirmOrder = async (req: Request, res: Response): Promise<void> => {
+    const { sessionId } = req.params;
+    const { tableNumber, customerNotes } = req.body;
+
+    try {
+      logger.info('Confirm order request', { sessionId, tableNumber });
+
+      if (!tableNumber) {
+        res.status(400).json({
+          success: false,
+          error: 'Missing required field: tableNumber'
+        });
+        return;
+      }
+
+      // Obtener la sesión
+      const session = await this.sessionRepository.findById(sessionId);
+
+      if (!session) {
+        res.status(404).json({
+          success: false,
+          error: 'Session not found'
+        });
+        return;
+      }
+
+      // Verificar que haya items en el carrito
+      if (!session.cart || session.cart.length === 0) {
+        res.status(400).json({
+          success: false,
+          error: 'Cart is empty. Add items before confirming order.'
+        });
+        return;
+      }
+
+      // Crear la comanda
+      const order = await this.orderService.createFromCart(
+        tableNumber,
+        sessionId,
+        session.cart,
+        customerNotes
+      );
+
+      // Limpiar el carrito después de crear la comanda
+      await this.sessionRepository.update(sessionId, {
+        cart: []
+      });
+
+      logger.info('Order created successfully', {
+        sessionId,
+        orderId: order.id,
+        tableNumber: order.tableNumber,
+        totalAmount: order.totalAmount
+      });
+
+      res.status(201).json({
+        success: true,
+        data: {
+          order,
+          message: `¡Pedido confirmado para la mesa ${tableNumber}! Tu comanda está en camino a la cocina.`
+        }
+      });
+    } catch (error) {
+      logger.error('Failed to confirm order', {
+        sessionId,
+        error: error instanceof Error ? error.message : 'Unknown'
+      });
+
+      if (error instanceof Error && error.message.includes('not found')) {
+        res.status(404).json({
+          success: false,
+          error: error.message
+        });
+        return;
+      }
+
+      if (error instanceof Error && error.message.includes('not available')) {
+        res.status(400).json({
+          success: false,
+          error: error.message
+        });
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Internal server error'
+      });
+    }
   };
 }
 
