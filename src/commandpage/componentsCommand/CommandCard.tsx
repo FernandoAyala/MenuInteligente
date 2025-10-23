@@ -138,7 +138,7 @@ const CommandCard: React.FC<CommandCardProps> = ({ command, onStatusChange }) =>
           {command.status === 'pending' && (
             <button
               onClick={() => handleStatusChange('in-progress')}
-              className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="px-6 py-3 bg-blue-600 text-white rounded-md text-base font-semibold hover:bg-blue-700 transition-colors"
             >
               Iniciar
             </button>
@@ -147,7 +147,7 @@ const CommandCard: React.FC<CommandCardProps> = ({ command, onStatusChange }) =>
           {command.status === 'in-progress' && (
             <button
               onClick={() => handleStatusChange('ready')}
-              className="px-3 py-1 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors"
+              className="px-6 py-3 bg-green-600 text-white rounded-md text-base font-semibold hover:bg-green-700 transition-colors"
             >
               Listo
             </button>
@@ -156,7 +156,7 @@ const CommandCard: React.FC<CommandCardProps> = ({ command, onStatusChange }) =>
           {command.status === 'ready' && (
             <button
               onClick={() => handleStatusChange('served')}
-              className="px-3 py-1 bg-gray-600 text-white rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+              className="px-6 py-3 bg-gray-600 text-white rounded-md text-base font-semibold hover:bg-gray-700 transition-colors"
             >
               Servido
             </button>

@@ -32,14 +32,16 @@ const CommandsBoard: React.FC = () => {
   };
 
   const filteredCommands = commands.filter(command => {
-    if (filter === 'all') return true;
+    // Cuando el filtro es "todos", excluir pedidos servidos
+    if (filter === 'all') return command.status !== 'served';
     return command.status === filter;
   });
 
   const sortedCommands = filteredCommands.sort((a, b) => {
     switch (sortBy) {
       case 'timestamp':
-        return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+        // Ordenar por tiempo de espera: los más antiguos primero (más tiempo de espera)
+        return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
       case 'table':
         return a.tableNumber - b.tableNumber;
       case 'status':
@@ -98,13 +100,13 @@ const CommandsBoard: React.FC = () => {
         </div>
 
         {/* Controles de filtro y ordenamiento */}
-        <div className="flex flex-wrap gap-4 items-center bg-white rounded-lg p-4 shadow">
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Filtrar por:</label>
+        <div className="flex flex-wrap gap-6 items-center bg-white rounded-lg p-6 shadow-md">
+          <div className="flex items-center space-x-3">
+            <label className="text-base font-bold text-gray-800">Filtrar por:</label>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value as 'all' | Command['status'])}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-5 py-3 border-2 border-gray-400 rounded-lg text-base font-semibold bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer hover:border-indigo-400 transition-colors min-w-[180px]"
             >
               <option value="all">Todos</option>
               <option value="pending">Pendientes</option>
@@ -114,12 +116,12 @@ const CommandsBoard: React.FC = () => {
             </select>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium text-gray-700">Ordenar por:</label>
+          <div className="flex items-center space-x-3">
+            <label className="text-base font-bold text-gray-800">Ordenar por:</label>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'timestamp' | 'table' | 'status')}
-              className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-5 py-3 border-2 border-gray-400 rounded-lg text-base font-semibold bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer hover:border-indigo-400 transition-colors min-w-[180px]"
             >
               <option value="timestamp">Hora de Pedido</option>
               <option value="table">Número de Mesa</option>
@@ -127,8 +129,8 @@ const CommandsBoard: React.FC = () => {
             </select>
           </div>
 
-          <div className="text-sm text-gray-600">
-            Mostrando {sortedCommands.length} de {commands.length} comandas
+          <div className="text-base font-medium text-gray-700 bg-gray-100 px-4 py-2 rounded-lg">
+            Mostrando <span className="font-bold text-indigo-600">{sortedCommands.length}</span> de <span className="font-bold">{commands.length}</span> comandas
           </div>
         </div>
       </div>
