@@ -19,8 +19,9 @@ import {
 } from '../interfaces/chat.interface';
 import { Recommendation } from '../interfaces/recommendation.interface';
 import { withTimeout } from '../middleware/error-handler.middleware';
-import { SpicyLevel } from '../models/menuItem.model';
+import { MenuItem, SpicyLevel } from '../models/menuItem.model';
 import { ConversationSlots, MessageRole } from '../models/session.model';
+import { MenuItemRepository } from '../repositories/menuItem.repository';
 import { SessionRepository } from '../repositories/session.repository';
 import { cacheService } from '../services/cache.service';
 import { EnhancedLLMService } from '../services/enhanced-llm.service';
@@ -37,11 +38,13 @@ export class ChatController {
   private recommendationService: RecommendationService;
   private sessionRepository: SessionRepository;
   private orderService: OrderService;
+  private menuItemRepository: MenuItemRepository;
 
   constructor() {
     this.llmService = new EnhancedLLMService();
     this.sessionRepository = new SessionRepository();
     this.orderService = new OrderService();
+    this.menuItemRepository = new MenuItemRepository();
     
     // Desactivar semantic scoring para evitar rate limit de OpenAI
     // (cada recomendación haría N llamadas al LLM, una por cada plato)
@@ -108,9 +111,10 @@ export class ChatController {
       
       const messageWithContext = contextForLLM + chatRequest.message;
       
+      // Extraer intenciones con timeout aumentado para proveedores LLM lentos
       const intents = await withTimeout(
         this.llmService.extractDetailedIntents(messageWithContext),
-        8000,
+        15000, // Aumentado de 8s a 15s para evitar timeouts en respuestas lentas
         'llm-intent-extraction'
       );
 
@@ -119,7 +123,11 @@ export class ChatController {
         metricsService.recordLatency(MetricType.LLM_CALL, Date.now() - llmStartTime);
       }
 
-      logger.debug('Intents extracted from LLM', { intents });
+      logger.debug('Intents extracted from LLM', { 
+        intents,
+        specialInstructions: intents.entities?.specialInstructions,
+        dishesMetioned: intents.entities?.dishesMetioned
+      });
 
       // 3. Actualizar slots con nueva información extraída
       const updatedSlots = this.updateSessionSlots(session.slots, intents.entities);
@@ -185,6 +193,165 @@ export class ChatController {
         }
       }
 
+      // 4.1 Si detecta ADD_TO_CART con platos mencionados, buscarlos y agregarlos
+      const hasAddToCartAction = actions.some(a => a.type === ChatActionType.ADD_TO_CART);
+      const needsDirectAddToCart = hasAddToCartAction
+        && intents.entities?.dishesMetioned 
+        && intents.entities.dishesMetioned.length > 0;
+
+      // FALLBACK: Si detecta ADD_TO_CART pero no hay dishesMetioned, generar recomendaciones
+      if (hasAddToCartAction && !needsDirectAddToCart && !recommendations) {
+        logger.warn('ADD_TO_CART detected but no dishes mentioned, generating recommendations as fallback', {
+          sessionId,
+          userMessage: chatRequest.message
+        });
+        
+        try {
+          const recs = await withTimeout(
+            this.recommendationService.generateRecommendations({
+              allergies: updatedSlots.allergens || [],
+              dietaryRestrictions: updatedSlots.dietaryRestrictions || [],
+              preferences: {
+                spicyLevel: updatedSlots.spicyPreference,
+                mealType: intents.entities.mealType ? [intents.entities.mealType] : undefined,
+                preferredCategories: updatedSlots.preferredCategories || [],
+                tags: intents.entities.preferences || [],
+                additionalNotes: chatRequest.message // Usar el mensaje completo para buscar
+              }
+            }),
+            5000,
+            'recommendations-fallback'
+          );
+          recommendations = recs;
+          logger.info('Fallback recommendations generated', {
+            sessionId,
+            count: recs?.length || 0
+          });
+        } catch (error) {
+          logger.error('Failed to generate fallback recommendations', {
+            sessionId,
+            error: error instanceof Error ? error.message : 'Unknown'
+          });
+        }
+      }
+
+      if (needsDirectAddToCart) {
+        try {
+          logger.info('Detecting direct add to cart request', { 
+            sessionId, 
+            dishes: intents.entities.dishesMetioned 
+          });
+
+          // Buscar los platos mencionados en Firestore
+          const { found, notFound } = await this.checkDishAvailability(intents.entities.dishesMetioned);
+          
+          if (found.length > 0) {
+            // Convertir MenuItem a Recommendation format para reutilizar lógica existente
+            recommendations = found.map((dish, index) => ({
+              dish: {
+                id: dish.id,
+                name: dish.name,
+                description: dish.description,
+                price: dish.price,
+                currency: dish.currency,
+                category: dish.category,
+                spicyLevel: dish.spicyLevel,
+                isVegan: dish.isVegan,
+                isVegetarian: dish.isVegetarian,
+                isGlutenFree: dish.isGlutenFree,
+                allergens: dish.allergens,
+                available: dish.available
+              },
+              score: 100, // Score máximo porque es solicitud directa
+              rank: index + 1,
+              justification: `Plato solicitado directamente: ${dish.name}`,
+              matchReasons: ['Solicitud directa del usuario'],
+              scoreBreakdown: {
+                safety: 100,
+                dietaryMatch: 100,
+                budgetFit: 100,
+                preferencesMatch: 100,
+                semanticScore: 0,
+                availability: dish.available ? 100 : 0,
+                total: 100,
+                weights: {
+                  safety: 1.0,
+                  dietaryMatch: 0.0,
+                  budgetFit: 0.0,
+                  preferencesMatch: 0.0,
+                  semanticScore: 0.0,
+                  availability: 0.0
+                }
+              },
+              safetyChecks: [
+                {
+                  type: 'dietary_restriction' as const,
+                  passed: true,
+                  details: 'Solicitud directa del usuario',
+                  severity: 'low' as const,
+                  checkedAt: new Date()
+                }
+              ]
+            }));
+
+            logger.info('Found dishes for direct add', { 
+              sessionId, 
+              foundCount: found.length,
+              notFoundCount: notFound.length 
+            });
+
+            // AGREGAR AUTOMÁTICAMENTE AL CARRITO EN EL BACKEND
+            try {
+              const specialInstructions = intents.entities?.specialInstructions || '';
+              
+              for (const dish of found) {
+                // Construir el item del carrito
+                const cartItem = {
+                  menuItemId: dish.id,
+                  name: dish.name,
+                  price: dish.price,
+                  currency: dish.currency,
+                  quantity: 1,
+                  specifications: [] as string[],
+                  specialInstructions: specialInstructions || undefined,
+                };
+
+                // Agregar al carrito de la sesión
+                const currentSession = await this.sessionRepository.findById(session.id);
+                if (currentSession) {
+                  const updatedCart = [...(currentSession.cart || []), cartItem];
+                  await this.sessionRepository.update(session.id, {
+                    cart: updatedCart,
+                    updatedAt: new Date(),
+                  });
+
+                  logger.info('Item added to cart automatically', {
+                    sessionId: session.id,
+                    dish: dish.name,
+                    specialInstructions: specialInstructions || 'none',
+                  });
+                }
+              }
+            } catch (cartError) {
+              logger.error('Failed to add items to cart automatically', {
+                sessionId: session.id,
+                error: cartError instanceof Error ? cartError.message : 'Unknown',
+              });
+            }
+          } else {
+            logger.warn('No dishes found for add to cart', { 
+              sessionId, 
+              requestedDishes: intents.entities.dishesMetioned 
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to find dishes for add to cart', {
+            sessionId,
+            error: error instanceof Error ? error.message : 'Unknown'
+          });
+        }
+      }
+
       // 5. Construir respuesta con contexto del mensaje y slots acumulados
       const responseMessage = await this.buildResponseMessage(
         chatRequest.message, 
@@ -218,7 +385,7 @@ export class ChatController {
           content: chatRequest.message
         });
 
-        // Guardar respuesta del bot
+        // Guardar respuesta del agente IA
         await this.sessionRepository.addMessage(session.id, {
           role: MessageRole.ASSISTANT,
           content: responseMessage
@@ -228,6 +395,80 @@ export class ChatController {
         await this.sessionRepository.update(session.id, {
           slots: updatedSlots
         });
+
+        // 6.1 Agregar items al carrito si se detectó acción ADD_TO_CART
+        if (actions.some(a => a.type === ChatActionType.ADD_TO_CART) && recommendations && recommendations.length > 0) {
+          try {
+            // Obtener el carrito actual
+            const currentCart = session.cart || [];
+            
+            // Agregar el primer item recomendado al carrito (el más relevante)
+            const itemToAdd = recommendations[0];
+            
+            // Extraer instrucciones especiales del mensaje del usuario
+            const specialInstructions = intents.entities?.specialInstructions || '';
+            
+            logger.info('Adding item to cart with special instructions', {
+              sessionId: session.id,
+              itemName: itemToAdd.dish.name,
+              specialInstructions: specialInstructions,
+              rawMessage: chatRequest.message
+            });
+            
+            // Verificar si ya existe en el carrito
+            const existingItemIndex = currentCart.findIndex(
+              item => item.menuItemId === itemToAdd.dish.id
+            );
+
+            if (existingItemIndex >= 0) {
+              // Si ya existe, incrementar cantidad y actualizar instrucciones si hay nuevas
+              currentCart[existingItemIndex].quantity += 1;
+              if (specialInstructions) {
+                // Combinar instrucciones existentes con las nuevas
+                const existingInstructions = currentCart[existingItemIndex].specialInstructions || '';
+                currentCart[existingItemIndex].specialInstructions = existingInstructions 
+                  ? `${existingInstructions}; ${specialInstructions}`
+                  : specialInstructions;
+              }
+              logger.info('Item quantity increased in cart', {
+                sessionId: session.id,
+                menuItemId: itemToAdd.dish.id,
+                newQuantity: currentCart[existingItemIndex].quantity,
+                specialInstructions: currentCart[existingItemIndex].specialInstructions
+              });
+            } else {
+              // Si no existe, agregar nuevo item con instrucciones
+              currentCart.push({
+                menuItemId: itemToAdd.dish.id,
+                quantity: 1,
+                specialInstructions: specialInstructions
+              });
+              logger.info('New item added to cart', {
+                sessionId: session.id,
+                menuItemId: itemToAdd.dish.id,
+                menuItemName: itemToAdd.dish.name,
+                specialInstructions: specialInstructions
+              });
+            }
+
+            // Actualizar el carrito en la sesión
+            await this.sessionRepository.update(session.id, {
+              cart: currentCart
+            });
+
+            logger.info('Cart updated successfully', {
+              sessionId: session.id,
+              cartSize: currentCart.length,
+              totalItems: currentCart.reduce((sum, item) => sum + item.quantity, 0)
+            });
+          } catch (cartError) {
+            logger.error('Failed to update cart', {
+              sessionId: session.id,
+              error: cartError instanceof Error ? cartError.message : 'Unknown'
+            });
+            // No lanzar error, continuar con la respuesta
+          }
+        }
 
         logger.debug('Session updated', { 
           sessionId: session.id, 
@@ -356,6 +597,53 @@ export class ChatController {
   }
 
   /**
+   * Verifica si los platos mencionados existen en el menú
+   * Retorna un objeto con platos encontrados y no encontrados
+   */
+  private async checkDishAvailability(dishNames: string[]): Promise<{
+    found: MenuItem[];
+    notFound: string[];
+  }> {
+    if (!dishNames || dishNames.length === 0) {
+      return { found: [], notFound: [] };
+    }
+
+    try {
+      // Obtener todos los platos disponibles
+      const availableItems = await this.menuItemRepository.findAllAvailable();
+      
+      const found: MenuItem[] = [];
+      const notFound: string[] = [];
+
+      // Normalizar nombres para comparación
+      const normalize = (str: string) => str.toLowerCase().trim()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // Remover acentos
+
+      for (const dishName of dishNames) {
+        const normalizedDish = normalize(dishName);
+        
+        // Buscar coincidencia exacta o parcial
+        const match = availableItems.find(item => {
+          const normalizedItemName = normalize(item.name);
+          return normalizedItemName.includes(normalizedDish) || 
+                 normalizedDish.includes(normalizedItemName);
+        });
+
+        if (match) {
+          found.push(match);
+        } else {
+          notFound.push(dishName);
+        }
+      }
+
+      return { found, notFound };
+    } catch (error) {
+      logger.error('Error checking dish availability', { error, dishNames });
+      return { found: [], notFound: dishNames };
+    }
+  }
+
+  /**
    * Construye el mensaje de respuesta basado en intenciones y acciones
    */
   private async buildResponseMessage(
@@ -457,6 +745,22 @@ export class ChatController {
 
     // 4. AGREGAR AL CARRITO
     if (actionTypes.includes(ChatActionType.ADD_TO_CART)) {
+      // Si hay recomendaciones, mencionar el plato específico que se agregó
+      if (hasRecommendations && recommendations.length > 0) {
+        const addedDish = recommendations[0].dish;
+        const specialInstructions = intents.entities?.specialInstructions;
+        
+        let message = `¡Excelente elección! He agregado **${addedDish.name}** ($${addedDish.price.toLocaleString()}) a tu carrito. 🛒`;
+        
+        // Si hay instrucciones especiales, mencionarlas en la respuesta
+        if (specialInstructions) {
+          message += `\n\n📝 Nota especial: ${specialInstructions}`;
+        }
+        
+        message += `\n\n¿Quieres agregar algo más o prefieres ver tu carrito?`;
+        
+        return message;
+      }
       return '¡Excelente elección! Lo agregaré a tu pedido. ¿Algo más que te gustaría añadir?';
     }
 
@@ -480,15 +784,49 @@ export class ChatController {
         return '¿Sobre qué plato te gustaría saber más? Puedo darte información sobre precios, ingredientes y detalles de preparación.';
       }
       
+      // Verificar disponibilidad real en Firestore
+      const { found, notFound } = await this.checkDishAvailability(dishes);
+      
+      if (found.length === 0) {
+        return `Lo siento, no tenemos ${dishes.join(', ')} en nuestro menú en este momento. ¿Te gustaría que te recomiende opciones similares?`;
+      }
+      
       if (infoType === 'price') {
-        return `Claro, déjame consultar el precio de ${dishes.join(', ')}. Los precios de nuestros platos varían según los ingredientes y el tamaño. ¿Te gustaría que te recomiende algo en un rango de precio específico?`;
+        const priceInfo = found.map(d => `**${d.name}**: $${d.price}`).join('\n');
+        let response = `Claro, aquí están los precios:\n\n${priceInfo}`;
+        if (notFound.length > 0) {
+          response += `\n\nNo encontré: ${notFound.join(', ')}`;
+        }
+        response += '\n\n¿Te gustaría ordenar alguno?';
+        return response;
       }
       
       if (infoType === 'ingredients') {
-        return `Por supuesto, te cuento sobre los ingredientes de ${dishes.join(', ')}. Este plato se prepara con ingredientes frescos seleccionados. ¿Tienes alguna alergia o restricción que deba considerar?`;
+        const ingredientsInfo = found.map(d => {
+          // Usar descripción como información de ingredientes
+          const info = d.description || 'Plato preparado con ingredientes frescos seleccionados';
+          const allergenInfo = d.allergens && d.allergens.length > 0 
+            ? `\n⚠️ Contiene: ${d.allergens.join(', ')}` 
+            : '';
+          return `**${d.name}**: ${info}${allergenInfo}`;
+        }).join('\n\n');
+        
+        let response = `Por supuesto, aquí está la información:\n\n${ingredientsInfo}`;
+        if (notFound.length > 0) {
+          response += `\n\nNo encontré: ${notFound.join(', ')}`;
+        }
+        response += '\n\n¿Tienes alguna alergia o restricción que deba considerar?';
+        return response;
       }
       
-      return `Te puedo dar información detallada sobre ${dishes.join(', ')}. ¿Qué te gustaría saber específicamente?`;
+      // Información general
+      const detailsInfo = found.map(d => `**${d.name}** - $${d.price}\n${d.description || 'Plato delicioso preparado con ingredientes frescos'}`).join('\n\n');
+      let response = `Te cuento sobre ${found.length === 1 ? 'este plato' : 'estos platos'}:\n\n${detailsInfo}`;
+      if (notFound.length > 0) {
+        response += `\n\nNo encontré: ${notFound.join(', ')}`;
+      }
+      response += '\n\n¿Te gustaría ordenar algo?';
+      return response;
     }
 
     // 8. VERIFICAR DISPONIBILIDAD
@@ -500,7 +838,22 @@ export class ChatController {
         return '¿Qué plato te gustaría saber si está disponible?';
       }
       
-      return `Déjame verificar si ${dishes.join(', ')} está disponible. Un momento...`;
+      // Verificar disponibilidad real en Firestore
+      const { found, notFound } = await this.checkDishAvailability(dishes);
+      
+      if (found.length > 0 && notFound.length === 0) {
+        // Todos los platos existen
+        const dishList = found.map(d => d.name).join(', ');
+        return `¡Sí! ${dishList} ${found.length === 1 ? 'está disponible' : 'están disponibles'}. ${found.length === 1 ? '¿Te gustaría ordenarlo?' : '¿Te gustaría ordenar alguno?'}`;
+      } else if (found.length > 0 && notFound.length > 0) {
+        // Algunos existen, otros no
+        const foundNames = found.map(d => d.name).join(', ');
+        const notFoundNames = notFound.join(', ');
+        return `Tenemos ${foundNames}, pero lamentablemente no tenemos ${notFoundNames} en este momento. ¿Te gustaría que te recomiende opciones similares?`;
+      } else {
+        // Ninguno existe
+        return `Lo siento, no tenemos ${dishes.join(', ')} en nuestro menú en este momento. ¿Te gustaría que te recomiende platos similares?`;
+      }
     }
 
     // 9. VER ALÉRGENOS

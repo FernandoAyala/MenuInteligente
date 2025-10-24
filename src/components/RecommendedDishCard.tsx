@@ -4,10 +4,10 @@
  * @module components/RecommendedDishCard
  */
 
+import { ChevronDown, ChevronUp, Info, Star } from 'lucide-react';
 import React, { useState } from 'react';
-import { Star, Info, ChevronDown, ChevronUp } from 'lucide-react';
-import DishCard from './DishCard';
 import { MenuItem } from '../types';
+import DishCard from './DishCard';
 
 /**
  * MenuItem extendido con información de recomendación
@@ -51,6 +51,9 @@ const RecommendedDishCard: React.FC<RecommendedDishCardProps> = ({
 }) => {
   const [showReason, setShowReason] = useState(defaultExpanded);
 
+  // Normalizar score: si ya está en formato 0-100, dividir por 100; si está en 0-1, usar directamente
+  const normalizedScore = menuItem.score > 1 ? menuItem.score / 100 : menuItem.score;
+
   /**
    * Convertir score (0-1) a estrellas (0-5)
    */
@@ -78,34 +81,50 @@ const RecommendedDishCard: React.FC<RecommendedDishCardProps> = ({
     return 'Opción disponible';
   };
 
-  const starRating = getStarRating(menuItem.score);
-  const scorePercentage = Math.round(menuItem.score * 100);
+  const starRating = getStarRating(normalizedScore);
+  const scorePercentage = Math.round(normalizedScore * 100);
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick(menuItem);
+    }
+  };
 
   return (
-    <div className={`relative ${className}`}>
-      {/* Badge de confianza (superpuesto en esquina superior derecha) */}
-      <div className="absolute top-2 right-2 z-10">
-        <div
-          className={`px-2 py-1 rounded-full text-xs font-semibold border ${getScoreColor(
-            menuItem.score
-          )} shadow-sm flex items-center gap-1`}
-        >
-          <Star className="w-3 h-3 fill-current" />
-          <span>{scorePercentage}%</span>
+    <div 
+      className={`relative ${className} overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer`}
+      onClick={handleClick}
+    >
+      {/* Badge de confianza en la parte superior */}
+      <div className="bg-gradient-to-r from-green-50 to-blue-50 px-3 py-2 border-b border-gray-200">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div
+              className={`px-2 py-1 rounded-full text-xs font-semibold border ${getScoreColor(
+                normalizedScore
+              )} flex items-center gap-1`}
+            >
+              <Star className="w-3 h-3 fill-current" />
+              <span>{scorePercentage}%</span>
+            </div>
+            <span className="text-xs text-gray-700 font-medium">{getScoreLabel(normalizedScore)}</span>
+          </div>
         </div>
       </div>
 
-      {/* Tarjeta base (DishCard) */}
-      <DishCard
-        menuItem={menuItem}
-        onClick={onClick}
-        showAddButton={showAddButton}
-        onAddToCart={onAddToCart}
-        onInterested={onInterested}
-        onViewAlternatives={onViewAlternatives}
-        variant={variant}
-        className="pb-0"
-      />
+      {/* Tarjeta base (DishCard) - sin el wrapper clickeable */}
+      <div className="relative">
+        <DishCard
+          menuItem={menuItem}
+          onClick={undefined}
+          showAddButton={showAddButton}
+          onAddToCart={onAddToCart}
+          onInterested={onInterested}
+          onViewAlternatives={onViewAlternatives}
+          variant={variant}
+          className="pb-0 rounded-none border-0 shadow-none hover:shadow-none"
+        />
+      </div>
 
       {/* Sección de explicación (dentro de la tarjeta) */}
       {menuItem.reason && (
@@ -145,7 +164,7 @@ const RecommendedDishCard: React.FC<RecommendedDishCardProps> = ({
                   />
                 ))}
                 <span className="ml-2 text-xs text-gray-500">
-                  {getScoreLabel(menuItem.score)}
+                  {getScoreLabel(normalizedScore)}
                 </span>
               </div>
 

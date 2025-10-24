@@ -56,14 +56,24 @@ export class OrderService {
         specifications.push(`Picante nivel ${menuItem.spicyLevel}`);
       }
 
-      dishes.push({
+      const dish: OrderDish = {
         menuItemId: menuItem.id,
         name: menuItem.name,
         quantity: item.quantity,
         price: menuItem.price,
-        specifications: specifications.length > 0 ? specifications : undefined,
-        specialInstructions: item.specialInstructions,
-      });
+      };
+
+      // Solo agregar specifications si hay alguna
+      if (specifications.length > 0) {
+        dish.specifications = specifications;
+      }
+
+      // Solo agregar specialInstructions si no está vacío
+      if (item.specialInstructions && item.specialInstructions.trim().length > 0) {
+        dish.specialInstructions = item.specialInstructions.trim();
+      }
+
+      dishes.push(dish);
     }
 
     const createOrderDto: CreateOrderDto = {

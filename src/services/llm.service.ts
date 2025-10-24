@@ -1,5 +1,5 @@
-import { LLMProviderFactory } from '../providers/llm.factory';
 import { ILLMProvider, LLMMessage, LLMProviderType, MessageRole } from '../interfaces/llm.interface';
+import { LLMProviderFactory } from '../providers/llm.factory';
 
 /**
  * Servicio de LLM que utiliza el patrón Adapter
@@ -30,7 +30,7 @@ export class LLMService {
   }
 
   /**
-   * Genera una respuesta del chatbot
+   * Genera una respuesta del agente IA conversacional
    */
   async generateChatResponse(
     conversationHistory: LLMMessage[],
