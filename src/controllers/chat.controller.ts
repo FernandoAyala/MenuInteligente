@@ -17,6 +17,7 @@ import {
   createChatAction,
   PipelineStage
 } from '../interfaces/chat.interface';
+import { MessageRole as LLMMessageRole } from '../interfaces/llm.interface';
 import { Recommendation } from '../interfaces/recommendation.interface';
 import { withTimeout } from '../middleware/error-handler.middleware';
 import { MenuItem, SpicyLevel } from '../models/menuItem.model';
@@ -111,22 +112,51 @@ export class ChatController {
       
       const messageWithContext = contextForLLM + chatRequest.message;
       
-      // Extraer intenciones con timeout aumentado para proveedores LLM lentos
-      const intents = await withTimeout(
-        this.llmService.extractDetailedIntents(messageWithContext),
-        15000, // Aumentado de 8s a 15s para evitar timeouts en respuestas lentas
-        'llm-intent-extraction'
-      );
+      // Extraer intenciones con timeout y fallback mejorado
+      let intents;
+      let llmFailed = false; // Flag para saber si el LLM falló
+      try {
+        intents = await withTimeout(
+          this.llmService.extractDetailedIntents(messageWithContext),
+          30000, // Aumentado a 30s para proveedores LLM lentos (OpenAI, Anthropic)
+          'llm-intent-extraction'
+        );
+      } catch (error) {
+        logger.warn('LLM intent extraction failed or timed out, using minimal fallback', { 
+          error: error instanceof Error ? error.message : 'Unknown',
+          message: chatRequest.message 
+        });
+        
+        llmFailed = true; // Marcar que el LLM falló
+        
+        // FALLBACK: Crear intents básicos para que el keyword fallback funcione
+        intents = {
+          intent: 'otro',
+          entities: {
+            dietaryRestrictions: [],
+            allergens: [],
+            budget: null,
+            dishesMetioned: [],
+            quantity: null,
+            spicyLevel: null,
+            mealType: null,
+            preferences: [],
+            specialInstructions: undefined
+          }
+        };
+      }
 
-      if (metricsService) {
+      if (metricsService && intents.intent !== 'otro') {
         metricsService.recordLLMCall();
         metricsService.recordLatency(MetricType.LLM_CALL, Date.now() - llmStartTime);
       }
 
-      logger.debug('Intents extracted from LLM', { 
-        intents,
+      logger.info('🔍 Intents extracted from LLM', { 
+        intent: intents.intent,
+        dishesMetioned: intents.entities?.dishesMetioned,
         specialInstructions: intents.entities?.specialInstructions,
-        dishesMetioned: intents.entities?.dishesMetioned
+        quantity: intents.entities?.quantity,
+        fullIntents: JSON.stringify(intents, null, 2)
       });
 
       // 3. Actualizar slots con nueva información extraída
@@ -142,11 +172,90 @@ export class ChatController {
       // 4. Convertir intenciones a acciones
       const actions = this.convertIntentsToActions(intents);
 
-      logger.info('Actions converted', { 
+      logger.info('🎯 Actions converted', { 
         sessionId,
+        intent: intents.intent,
         actionsCount: actions.length,
-        actionTypes: actions.map(a => a.type)
+        actionTypes: actions.map(a => a.type),
+        actions: actions.map(a => ({ type: a.type, label: a.label }))
       });
+
+      // 🔍 FALLBACK: Detectar platos mencionados por palabras clave SOLO si el LLM FALLÓ
+      // Si el LLM funcionó correctamente, confiamos en su análisis semántico
+      if (llmFailed && (!intents.entities?.dishesMetioned || intents.entities.dishesMetioned.length === 0)) {
+        logger.info('LLM failed and no dishes detected, trying keyword fallback as last resort', { 
+          sessionId, 
+          message: chatRequest.message 
+        });
+        
+        try {
+          // Buscar platos por coincidencia de texto en el mensaje
+          const allMenuItems = await this.menuItemRepository.findAllAvailable();
+          const messageLower = chatRequest.message.toLowerCase();
+          
+          const matchedDishes = allMenuItems.filter((item: MenuItem) => {
+            const nameLower = item.name.toLowerCase();
+            
+            // 1. Coincidencia exacta del nombre completo
+            if (messageLower.includes(nameLower)) {
+              return true;
+            }
+            
+            // 2. Coincidencia de palabras significativas (>= 4 caracteres)
+            // Esto evita falsos positivos con palabras como "sin", "con", "la", etc.
+            const significantWords = nameLower.split(' ').filter((word: string) => word.length >= 4);
+            
+            // Requiere que al menos el 50% de las palabras significativas estén en el mensaje
+            if (significantWords.length > 0) {
+              const matchedWords = significantWords.filter((word: string) => messageLower.includes(word));
+              return matchedWords.length >= Math.ceil(significantWords.length * 0.5);
+            }
+            
+            return false;
+          });
+          
+          if (matchedDishes.length > 0) {
+            logger.info('Found dishes by keyword match', { 
+              sessionId,
+              dishes: matchedDishes.map((d: MenuItem) => d.name)
+            });
+            
+            // Actualizar entities con los platos encontrados
+            intents.entities.dishesMetioned = matchedDishes.map((d: MenuItem) => d.name);
+            
+            // Si hay palabras como "quiero", "dame", "traeme" → agregar al carrito
+            const orderKeywords = ['quiero', 'dame', 'traeme', 'tráeme', 'pideme', 'pídeme', 'necesito'];
+            const hasOrderIntent = orderKeywords.some((kw: string) => messageLower.includes(kw));
+            
+            // Si hay palabras de eliminar → REMOVE_FROM_CART
+            const removeKeywords = ['sacá', 'saca', 'quitá', 'quita', 'eliminá', 'elimina', 'borrá', 'borra', 'no quiero'];
+            const hasRemoveIntent = removeKeywords.some((kw: string) => messageLower.includes(kw));
+            
+            // Si pregunta por detalles, ingredientes, etc. → VIEW_ITEM_DETAILS
+            const infoKeywords = ['interesa', 'más sobre', 'más detalles', 'cuéntame', 'explicame', 'ingredientes', 'preparación', 'lleva', 'tiene', 'cómo'];
+            const hasInfoIntent = infoKeywords.some((kw: string) => messageLower.includes(kw));
+            
+            if (hasRemoveIntent && !actions.some(a => a.type === ChatActionType.REMOVE_FROM_CART)) {
+              logger.info('Adding REMOVE_FROM_CART action based on keyword detection', { sessionId });
+              actions.push(createChatAction(ChatActionType.REMOVE_FROM_CART, 'Quitar del carrito'));
+            } else if (hasOrderIntent && !actions.some(a => a.type === ChatActionType.ADD_TO_CART)) {
+              logger.info('Adding ADD_TO_CART action based on keyword detection', { sessionId });
+              actions.push(createChatAction(ChatActionType.ADD_TO_CART, 'Agregar al carrito'));
+            } else if (hasInfoIntent && !actions.some(a => a.type === ChatActionType.VIEW_ITEM_DETAILS)) {
+              logger.info('Adding VIEW_ITEM_DETAILS action based on keyword detection', { sessionId });
+              actions.push(createChatAction(ChatActionType.VIEW_ITEM_DETAILS, 'Ver detalles', {
+                infoType: messageLower.includes('ingrediente') || messageLower.includes('preparación') ? 'ingredients' : 'details',
+                dishes: matchedDishes.map((d: MenuItem) => d.name)
+              }));
+            }
+          }
+        } catch (error) {
+          logger.error('Failed to perform keyword fallback', {
+            sessionId,
+            error: error instanceof Error ? error.message : 'Unknown'
+          });
+        }
+      }
 
       // 4. Generar recomendaciones si se requieren (VIEW_MENU o REQUEST_RECOMMENDATION)
       let recommendations: Recommendation[] | undefined = undefined;
@@ -370,9 +479,20 @@ export class ChatController {
           if (pendingItems.length === 0) {
             logger.warn('Cannot place order: no pending items in cart', { sessionId: session.id });
           } else {
-            // Crear el pedido SOLO con items pendientes
-            // TODO: Obtener tableNumber de alguna parte (por ahora usar 1 por defecto)
-            const tableNumber = 1; // Podría venir del sessionId o de un prompt previo
+            // Obtener número de mesa de la sesión o generar uno nuevo
+            const tableNumber = currentSession?.tableNumber || Math.floor(Math.random() * 20) + 1;
+            
+            if (!currentSession?.tableNumber) {
+              logger.info('Assigning new table number to session', { 
+                sessionId: session.id, 
+                tableNumber 
+              });
+            } else {
+              logger.info('Using existing table number from session', { 
+                sessionId: session.id, 
+                tableNumber 
+              });
+            }
             
             const order = await this.orderService.createFromCart(
               tableNumber,
@@ -543,6 +663,49 @@ export class ChatController {
               error: cartError instanceof Error ? cartError.message : 'Unknown'
             });
             // No lanzar error, continuar con la respuesta
+          }
+        }
+
+        // 6.2 Eliminar items del carrito si se detectó acción REMOVE_FROM_CART
+        if (actions.some(a => a.type === ChatActionType.REMOVE_FROM_CART)) {
+          try {
+            const currentCart = session.cart || [];
+            const dishesToRemove = intents.entities?.dishesMetioned || [];
+            
+            if (dishesToRemove.length === 0) {
+              logger.warn('REMOVE_FROM_CART action but no dishes mentioned', { sessionId: session.id });
+            } else {
+              logger.info('Removing items from cart', {
+                sessionId: session.id,
+                dishesToRemove
+              });
+              
+              // Buscar los platos en Firestore para obtener sus IDs
+              const { found } = await this.checkDishAvailability(dishesToRemove);
+              
+              // Filtrar el carrito quitando los items solicitados
+              const updatedCart = currentCart.filter(cartItem => {
+                const shouldRemove = found.some(dish => dish.id === cartItem.menuItemId);
+                return !shouldRemove;
+              });
+              
+              const removedCount = currentCart.length - updatedCart.length;
+              
+              await this.sessionRepository.update(session.id, {
+                cart: updatedCart
+              });
+              
+              logger.info('Items removed from cart', {
+                sessionId: session.id,
+                removedCount,
+                newCartSize: updatedCart.length
+              });
+            }
+          } catch (cartError) {
+            logger.error('Failed to remove from cart', {
+              sessionId: session.id,
+              error: cartError instanceof Error ? cartError.message : 'Unknown'
+            });
           }
         }
 
@@ -840,9 +1003,22 @@ export class ChatController {
       return '¡Excelente elección! Lo agregaré a tu pedido. ¿Algo más que te gustaría añadir?';
     }
 
-    // 5. VER CARRITO
+    // 5. VER CARRITO / SOLICITAR CUENTA
     if (actionTypes.includes(ChatActionType.VIEW_CART)) {
+      // Si el mensaje incluye palabras de "cuenta" o "pagar", mostrar total
+      if (msgLower.includes('cuenta') || msgLower.includes('pagar') || msgLower.includes('cuánto') || msgLower.includes('cuanto')) {
+        return 'Por supuesto, aquí está tu cuenta. Puedes ver el detalle completo en el panel del carrito. ¿Deseas confirmar el pedido para que proceda el pago?';
+      }
       return 'Aquí está tu pedido actual. ¿Deseas modificar algo o estás listo para confirmar?';
+    }
+
+    // 5.1 QUITAR DEL CARRITO
+    if (actionTypes.includes(ChatActionType.REMOVE_FROM_CART)) {
+      const dishes = intents.entities?.dishesMetioned || [];
+      if (dishes.length === 0) {
+        return '¿Qué plato querés quitar del carrito?';
+      }
+      return `Listo, saqué ${dishes.join(', ')} de tu pedido. ¿Querés agregar algo más o revisamos el carrito?`;
     }
 
     // 6. REALIZAR PEDIDO
@@ -878,31 +1054,186 @@ export class ChatController {
       }
       
       if (infoType === 'ingredients') {
-        const ingredientsInfo = found.map(d => {
-          // Usar descripción como información de ingredientes
-          const info = d.description || 'Plato preparado con ingredientes frescos seleccionados';
-          const allergenInfo = d.allergens && d.allergens.length > 0 
-            ? `\n⚠️ Contiene: ${d.allergens.join(', ')}` 
-            : '';
-          return `**${d.name}**: ${info}${allergenInfo}`;
+        // 🧠 GENERAR RESPUESTA ENRIQUECIDA CON LLM
+        try {
+          // Construir contexto del plato para el LLM
+          const dishContext = found.map(d => {
+            const dishInfo = {
+              nombre: d.name,
+              descripcion: d.description || 'Sin descripción',
+              precio: `$${d.price}`,
+              categoria: d.category,
+              alergenos: d.allergens?.join(', ') || 'ninguno',
+              vegano: d.isVegan ? 'Sí' : 'No',
+              vegetariano: d.isVegetarian ? 'Sí' : 'No',
+              sinGluten: d.isGlutenFree ? 'Sí' : 'No',
+              nivelPicante: d.spicyLevel || 0
+            };
+            return JSON.stringify(dishInfo, null, 2);
+          }).join('\n\n');
+
+          const enrichmentPrompt = `Eres un sommelier y chef experto de un restaurante. Un cliente te preguntó sobre este plato:
+
+${dishContext}
+
+Genera una respuesta conversacional y atractiva que incluya:
+1. Una breve descripción apetitosa del plato (resaltando sus ingredientes principales)
+2. Sugerencias de maridaje (bebidas que combinen bien)
+3. Un dato curioso o tip gastronómico sobre el plato
+4. Recomendación de acompañamientos o modificaciones populares
+
+La respuesta debe ser:
+- Cálida y profesional
+- Máximo 150 palabras
+- En español rioplatense (Argentina)
+- Sin usar markdown (** o ##), solo texto natural
+
+NO inventes ingredientes que no estén en la descripción original. Si la descripción es genérica, enfócate en el tipo de plato.`;
+
+          const enrichedResponse = await withTimeout(
+            (async () => {
+              const messages = [
+                {
+                  role: LLMMessageRole.SYSTEM,
+                  content: enrichmentPrompt
+                }
+              ];
+              const response = await this.llmService['provider'].generateResponse(messages, {
+                temperature: 0.7,
+                maxTokens: 300
+              });
+              return response.content;
+            })(),
+            8000,
+            'dish-enrichment'
+          );
+
+          // Agregar información de alérgenos al final
+          const allergenInfo = found.filter(d => d.allergens && d.allergens.length > 0)
+            .map(d => `⚠️ ${d.name} contiene: ${d.allergens!.join(', ')}`)
+            .join('\n');
+
+          let response = enrichedResponse;
+          if (allergenInfo) {
+            response += `\n\n${allergenInfo}`;
+          }
+          
+          if (notFound.length > 0) {
+            response += `\n\nNo encontré información sobre: ${notFound.join(', ')}`;
+          }
+          
+          response += '\n\n¿Te gustaría agregarlo a tu pedido?';
+          
+          return response;
+        } catch (error) {
+          logger.error('Failed to generate enriched dish info with LLM, falling back to basic info', {
+            error: error instanceof Error ? error.message : 'Unknown'
+          });
+          
+          // FALLBACK: Usar descripción básica de Firestore
+          const ingredientsInfo = found.map(d => {
+            const info = d.description || 'Plato preparado con ingredientes frescos seleccionados';
+            const allergenInfo = d.allergens && d.allergens.length > 0 
+              ? `\n⚠️ Contiene: ${d.allergens.join(', ')}` 
+              : '';
+            return `**${d.name}**: ${info}${allergenInfo}`;
+          }).join('\n\n');
+          
+          let response = `Por supuesto, aquí está la información:\n\n${ingredientsInfo}`;
+          if (notFound.length > 0) {
+            response += `\n\nNo encontré: ${notFound.join(', ')}`;
+          }
+          response += '\n\n¿Tienes alguna alergia o restricción que deba considerar?';
+          return response;
+        }
+      }
+      
+      // Información general - USAR LLM PARA GENERAR RESPUESTA ENRIQUECIDA 🧠
+      try {
+        // Construir contexto del plato para el LLM
+        const dishContext = found.map(d => {
+          const dishInfo = {
+            nombre: d.name,
+            descripcion: d.description || 'Sin descripción',
+            precio: `$${d.price}`,
+            categoria: d.category,
+            alergenos: d.allergens?.join(', ') || 'ninguno',
+            vegano: d.isVegan ? 'Sí' : 'No',
+            vegetariano: d.isVegetarian ? 'Sí' : 'No',
+            sinGluten: d.isGlutenFree ? 'Sí' : 'No',
+            nivelPicante: d.spicyLevel || 0
+          };
+          return JSON.stringify(dishInfo, null, 2);
         }).join('\n\n');
+
+        const enrichmentPrompt = `Eres un sommelier y chef experto de un restaurante. Un cliente te preguntó sobre este plato y quiere saber más:
+
+${dishContext}
+
+Genera una respuesta conversacional y atractiva que incluya:
+1. Una descripción apetitosa del plato (resaltando sus ingredientes principales)
+2. Por qué es una buena elección (beneficios, sabor, textura)
+3. Sugerencias de maridaje (bebidas que combinen bien)
+4. Un dato curioso o tip gastronómico sobre el plato
+5. Recomendación de acompañamientos o modificaciones populares
+
+La respuesta debe ser:
+- Cálida y entusiasta, como un experto recomendando a un amigo
+- Máximo 180 palabras
+- En español rioplatense (Argentina, uso de "vos")
+- Sin usar markdown (** o ##), solo texto natural con emojis ocasionales
+
+NO inventes ingredientes que no estén en la descripción original. Si la descripción es genérica, enfócate en el tipo de plato y categoría.`;
+
+        const enrichedResponse = await withTimeout(
+          (async () => {
+            const messages = [
+              {
+                role: LLMMessageRole.SYSTEM,
+                content: enrichmentPrompt
+              }
+            ];
+            const response = await this.llmService['provider'].generateResponse(messages, {
+              temperature: 0.8, // Más creatividad para respuestas generales
+              maxTokens: 350
+            });
+            return response.content;
+          })(),
+          10000, // 10 segundos para respuesta general
+          'dish-general-info-enrichment'
+        );
+
+        // Agregar información de alérgenos al final
+        const allergenInfo = found.filter(d => d.allergens && d.allergens.length > 0)
+          .map(d => `\n⚠️ ${d.name} contiene: ${d.allergens!.join(', ')}`)
+          .join('\n');
+
+        let response = enrichedResponse;
+        if (allergenInfo) {
+          response += `\n${allergenInfo}`;
+        }
         
-        let response = `Por supuesto, aquí está la información:\n\n${ingredientsInfo}`;
+        if (notFound.length > 0) {
+          response += `\n\nNo encontré información sobre: ${notFound.join(', ')}`;
+        }
+        
+        response += '\n\n¿Te gustaría agregarlo a tu pedido?';
+        
+        return response;
+      } catch (error) {
+        logger.error('Failed to generate enriched dish info with LLM, falling back to basic info', {
+          error: error instanceof Error ? error.message : 'Unknown'
+        });
+        
+        // FALLBACK: Usar descripción básica de Firestore
+        const detailsInfo = found.map(d => `**${d.name}** - $${d.price}\n${d.description || 'Plato delicioso preparado con ingredientes frescos'}`).join('\n\n');
+        let response = `Te cuento sobre ${found.length === 1 ? 'este plato' : 'estos platos'}:\n\n${detailsInfo}`;
         if (notFound.length > 0) {
           response += `\n\nNo encontré: ${notFound.join(', ')}`;
         }
-        response += '\n\n¿Tienes alguna alergia o restricción que deba considerar?';
+        response += '\n\n¿Te gustaría ordenar algo?';
         return response;
       }
-      
-      // Información general
-      const detailsInfo = found.map(d => `**${d.name}** - $${d.price}\n${d.description || 'Plato delicioso preparado con ingredientes frescos'}`).join('\n\n');
-      let response = `Te cuento sobre ${found.length === 1 ? 'este plato' : 'estos platos'}:\n\n${detailsInfo}`;
-      if (notFound.length > 0) {
-        response += `\n\nNo encontré: ${notFound.join(', ')}`;
-      }
-      response += '\n\n¿Te gustaría ordenar algo?';
-      return response;
     }
 
     // 8. VERIFICAR DISPONIBILIDAD
@@ -1040,6 +1371,10 @@ export class ChatController {
       actions.push(createChatAction(ChatActionType.ADD_TO_CART, 'Agregar al carrito'));
     }
     
+    if (primaryIntent === 'quitar_del_pedido') {
+      actions.push(createChatAction(ChatActionType.REMOVE_FROM_CART, 'Quitar del carrito'));
+    }
+    
     if (primaryIntent === 'modificar_pedido') {
       actions.push(createChatAction(ChatActionType.MODIFY_ORDER, 'Modificar pedido'));
     }
@@ -1051,6 +1386,9 @@ export class ChatController {
     if (primaryIntent === 'confirmar_pedido') {
       actions.push(createChatAction(ChatActionType.PLACE_ORDER, 'Realizar pedido'));
     }
+    
+    // NOTA: "solicitar_cuenta" NO genera acción - se maneja solo visualmente en el frontend
+    // El botón "Solicitar Cuenta" en CartPanel abre el panel sin enviar mensaje al chat
     
     // OTRAS: intención "otro" no genera acciones específicas (respuesta conversacional)
 

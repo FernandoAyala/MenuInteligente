@@ -87,7 +87,7 @@ export class OrderService {
 
     const order = await this.orderRepository.create(createOrderDto);
 
-    // ✅ MARCAR ITEMS COMO CONFIRMADOS EN LA SESIÓN
+    // ✅ MARCAR ITEMS COMO CONFIRMADOS EN LA SESIÓN Y GUARDAR NÚMERO DE MESA
     try {
       const session = await this.sessionRepository.findById(sessionId);
       if (session) {
@@ -112,7 +112,14 @@ export class OrderService {
           return cartItem;
         });
 
-        await this.sessionRepository.update(sessionId, { cart: updatedCart });
+        // Guardar el número de mesa en la sesión si es el primer pedido
+        const updateData: { cart: CartItem[]; tableNumber?: number } = { cart: updatedCart };
+        if (!session.tableNumber) {
+          updateData.tableNumber = tableNumber;
+          console.log(`✅ Mesa ${tableNumber} asignada a la sesión ${sessionId}`);
+        }
+
+        await this.sessionRepository.update(sessionId, updateData);
         console.log('✅ Items del carrito marcados como confirmados en Firestore');
       }
     } catch (error) {
