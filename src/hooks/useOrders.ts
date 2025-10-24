@@ -72,13 +72,14 @@ export const useOrders = (): UseOrdersReturn => {
       reconnectionAttempts: 5,
     });
 
-    // Unirse a la sala de la brigada
-    socketInstance.emit('join-kitchen-board');
-
     // Eventos de conexión
     socketInstance.on('connect', () => {
       console.log('✅ WebSocket conectado');
       setConnected(true);
+      
+      // Unirse a la sala de la brigada DESPUÉS de conectar
+      console.log('📡 Uniéndose a la sala de cocina...');
+      socketInstance.emit('kitchen:join');
     });
 
     socketInstance.on('disconnect', () => {
@@ -91,9 +92,14 @@ export const useOrders = (): UseOrdersReturn => {
       setConnected(false);
     });
 
+    // Confirmación de unión a la sala de cocina
+    socketInstance.on('kitchen:joined', (data: any) => {
+      console.log('✅ Unido a la sala de cocina:', data);
+    });
+
     // Eventos de comandas
     socketInstance.on('order:created', (data: { order: Command }) => {
-      console.log('🆕 Nueva comanda recibida:', data.order);
+      console.log('🆕 Nueva comanda recibida vía WebSocket:', data.order);
       const transformedOrder = transformWebSocketOrder(data.order);
       setOrders((prev) => [transformedOrder, ...prev]);
     });
@@ -125,7 +131,8 @@ export const useOrders = (): UseOrdersReturn => {
 
     // Cleanup al desmontar
     return () => {
-      socketInstance.emit('leave-kitchen-board');
+      console.log('🔌 Desconectando del WebSocket...');
+      socketInstance.emit('kitchen:leave');
       socketInstance.disconnect();
     };
   }, []);

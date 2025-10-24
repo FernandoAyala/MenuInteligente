@@ -35,8 +35,10 @@ initializeFirebase();
 // Importar rutas
 import chatRoutes from './routes/chat.routes';
 import llmRoutes from './routes/llm.routes';
+import menuItemRoutes from './routes/menuItem.routes';
 import ordersRoutes from './routes/orders.routes';
 import recommendationsRoutes from './routes/recommendations.route';
+import sessionRoutes from './routes/session.routes';
 
 // Importar middleware de error handling
 import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware';
@@ -61,7 +63,9 @@ app.get('/', (_req, res) => {
       chat: '/api/chat',
       llm: '/api/llm',
       recommendations: '/api/recommendations',
-      orders: '/api/orders'
+      orders: '/api/orders',
+      sessions: '/api/sessions',
+      menuItems: '/api/menu-items'
     },
     frontend: config.nodeEnv === 'production' 
       ? 'Serving static files' 
@@ -74,6 +78,8 @@ app.use('/api/chat', chatRoutes); // Epic #60: API Conversacional
 app.use('/api/llm', llmRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
 app.use('/api/orders', ordersRoutes); // Gestión de comandas/pedidos
+app.use('/api/sessions', sessionRoutes); // Gestión de sesiones
+app.use('/api/menu-items', menuItemRoutes); // Items del menú
 
 // Servir archivos estáticos del frontend (PRODUCCIÓN)
 // En producción, el frontend compilado estará en /dist-frontend
