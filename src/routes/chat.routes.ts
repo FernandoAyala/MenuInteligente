@@ -7,11 +7,11 @@
 
 import express from 'express';
 import { chatController } from '../controllers/chat.controller';
-import { validateChatRequest } from '../middleware/validation.middleware';
-import { chatRateLimiter } from '../middleware/rate-limit.middleware';
 import { asyncHandler } from '../middleware/error-handler.middleware';
+import { chatRateLimiter } from '../middleware/rate-limit.middleware';
+import { validateChatRequest } from '../middleware/validation.middleware';
 
-const router = express.Router();
+const router: express.Router = express.Router();
 
 /**
  * POST /api/chat
@@ -45,6 +45,18 @@ router.get(
 router.get(
   '/health',
   asyncHandler(chatController.healthCheck)
+);
+
+/**
+ * POST /api/chat/:sessionId/confirm-order
+ * Confirmar y crear una comanda desde el carrito de la sesión
+ * 
+ * Body: { tableNumber: number, customerNotes?: string }
+ */
+router.post(
+  '/:sessionId/confirm-order',
+  chatRateLimiter,
+  asyncHandler(chatController.confirmOrder)
 );
 
 export default router;

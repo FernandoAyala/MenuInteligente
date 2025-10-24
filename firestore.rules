@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Reglas para la colección de items del menú
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Reglas para la colección de sesiones de chat
+    match /sessions/{sessionId} {
+      allow read, write: if true; // TODO: Mejorar seguridad en producción
+    }
+    
+    // Reglas para la colección de órdenes/pedidos
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if request.auth != null;
+    }
+    
+    // Reglas para otras colecciones
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

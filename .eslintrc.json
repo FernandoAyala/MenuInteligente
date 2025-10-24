@@ -21,6 +21,7 @@
     "src/components/**",
     "src/hooks/**",
     "src/types/**",
+    "src/commandpage/**",
     "src/vite-env.d.ts",
     "src/App.tsx",
     "src/main.tsx",

@@ -1,8 +1,8 @@
-import express, { Application } from 'express';
 import cors from 'cors';
+import express, { Application } from 'express';
+import { createServer } from 'http';
 import path from 'path';
 import { Server } from 'socket.io';
-import { createServer } from 'http';
 import { config } from './config/env.config';
 import { initializeFirebase } from './config/firebase.config';
 
@@ -10,16 +10,22 @@ import { initializeFirebase } from './config/firebase.config';
 const app: Application = express();
 const httpServer = createServer(app);
 
-// Configuración de Socket.io
+// Configuración de Socket.io con soporte para múltiples frontends
 const io = new Server(httpServer, {
   cors: {
-    origin: config.allowedOrigins,
-    methods: ['GET', 'POST'],
+    origin: config.allowedOrigins, // Incluye puertos 5173 y 5174
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    credentials: true,
   },
 });
 
-// Middleware
-app.use(cors({ origin: config.allowedOrigins }));
+// Middleware de CORS más permisivo para desarrollo
+app.use(cors({ 
+  origin: config.allowedOrigins, // Incluye puertos 5173 y 5174
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -27,9 +33,10 @@ app.use(express.urlencoded({ extended: true }));
 initializeFirebase();
 
 // Importar rutas
-import llmRoutes from './routes/llm.routes';
-import recommendationsRoutes from './routes/recommendations.route';
 import chatRoutes from './routes/chat.routes';
+import llmRoutes from './routes/llm.routes';
+import ordersRoutes from './routes/orders.routes';
+import recommendationsRoutes from './routes/recommendations.route';
 
 // Importar middleware de error handling
 import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware';
@@ -53,7 +60,8 @@ app.get('/', (_req, res) => {
       health: '/health',
       chat: '/api/chat',
       llm: '/api/llm',
-      recommendations: '/api/recommendations'
+      recommendations: '/api/recommendations',
+      orders: '/api/orders'
     },
     frontend: config.nodeEnv === 'production' 
       ? 'Serving static files' 
@@ -65,6 +73,7 @@ app.get('/', (_req, res) => {
 app.use('/api/chat', chatRoutes); // Epic #60: API Conversacional
 app.use('/api/llm', llmRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/orders', ordersRoutes); // Gestión de comandas/pedidos
 
 // Servir archivos estáticos del frontend (PRODUCCIÓN)
 // En producción, el frontend compilado estará en /dist-frontend
@@ -103,7 +112,12 @@ if (config.nodeEnv === 'production') {
 // Global error handler (SIEMPRE al final)
 app.use(errorHandler);
 
+// Importar y configurar socket de comandas
+import { initializeOrderSocket } from './sockets/order.socket';
+
 // Socket.io connection handling
+initializeOrderSocket(io);
+
 io.on('connection', (socket) => {
   console.log(`Cliente conectado: ${socket.id}`);
 
@@ -121,3 +135,4 @@ httpServer.listen(PORT, () => {
 });
 
 export { app, io };
+
