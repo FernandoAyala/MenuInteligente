@@ -232,6 +232,31 @@ export class RecommendationService {
             conflictingRestrictions.push('sin gluten');
             rejectionReasons.push('Contiene gluten');
           }
+        } else if (restriction.includes('lactose') || restriction.includes('lactosa')) {
+          if (!dish.isLactoseFree) {
+            conflictingRestrictions.push('sin lactosa');
+            rejectionReasons.push('Contiene lactosa');
+          }
+        } else if (restriction.includes('kosher')) {
+          if (!dish.isKosher) {
+            conflictingRestrictions.push('kosher');
+            rejectionReasons.push('No es kosher');
+          }
+        } else if (restriction.includes('halal')) {
+          if (!dish.isHalal) {
+            conflictingRestrictions.push('halal');
+            rejectionReasons.push('No es halal');
+          }
+        } else if (restriction.includes('paleo')) {
+          if (!dish.isPaleo) {
+            conflictingRestrictions.push('paleo');
+            rejectionReasons.push('No es paleo');
+          }
+        } else if (restriction.includes('keto')) {
+          if (!dish.isKeto) {
+            conflictingRestrictions.push('keto');
+            rejectionReasons.push('No es keto');
+          }
         }
       }
 
@@ -409,6 +434,16 @@ export class RecommendationService {
         if (dish.isVegetarian) matches++;
       } else if (restriction.includes('gluten') || restriction.includes('celiac')) {
         if (dish.isGlutenFree) matches++;
+      } else if (restriction.includes('lactose') || restriction.includes('lactosa')) {
+        if (dish.isLactoseFree) matches++;
+      } else if (restriction.includes('kosher')) {
+        if (dish.isKosher) matches++;
+      } else if (restriction.includes('halal')) {
+        if (dish.isHalal) matches++;
+      } else if (restriction.includes('paleo')) {
+        if (dish.isPaleo) matches++;
+      } else if (restriction.includes('keto')) {
+        if (dish.isKeto) matches++;
       }
     }
 
@@ -453,6 +488,17 @@ export class RecommendationService {
     if (preferences.spicyLevel !== undefined && dish.spicyLevel !== undefined) {
       const spicyDiff = Math.abs(preferences.spicyLevel - dish.spicyLevel);
       score += (3 - spicyDiff) * 5;
+    }
+
+    // Match de tags de preferencias (NUEVO)
+    if (preferences.tags && preferences.tags.length > 0 && dish.tags && dish.tags.length > 0) {
+      const dishTagsLower = dish.tags.map((t: string) => t.toLowerCase());
+      const matchingTags = preferences.tags.filter((prefTag: string) =>
+        dishTagsLower.some((dishTag: string) => dishTag.includes(prefTag.toLowerCase()))
+      );
+      // Cada tag que coincide suma puntos
+      const tagMatchRatio = matchingTags.length / preferences.tags.length;
+      score += tagMatchRatio * 30; // Hasta 30 puntos por tags
     }
 
     // Match de tipo de comida y categorías - basado en descripción y nombre del plato
@@ -692,6 +738,21 @@ export class RecommendationService {
       if (dish.isGlutenFree) {
         reasons.push('no contiene gluten');
       }
+      if (dish.isLactoseFree) {
+        reasons.push('no contiene lactosa');
+      }
+      if (dish.isKosher) {
+        reasons.push('tiene certificación kosher');
+      }
+      if (dish.isHalal) {
+        reasons.push('tiene certificación halal');
+      }
+      if (dish.isPaleo) {
+        reasons.push('es paleo');
+      }
+      if (dish.isKeto) {
+        reasons.push('es keto');
+      }
     }
 
     // Razón de presupuesto
@@ -699,7 +760,18 @@ export class RecommendationService {
       reasons.push(`se ajusta perfecto a tu presupuesto ($${dish.price})`);
     }
 
-    // Razón de preferencias
+    // Razón de preferencias con tags (NUEVO)
+    if (params.preferences.tags && params.preferences.tags.length > 0 && dish.tags && dish.tags.length > 0) {
+      const dishTagsLower = dish.tags.map((t: string) => t.toLowerCase());
+      const matchingTags = params.preferences.tags.filter((prefTag: string) =>
+        dishTagsLower.some((dishTag: string) => dishTag.includes(prefTag.toLowerCase()))
+      );
+      if (matchingTags.length > 0) {
+        reasons.push(`es ${matchingTags.join(', ')}`);
+      }
+    }
+
+    // Razón de preferencias generales
     if (scoreBreakdown.preferencesMatch >= 80) {
       reasons.push('coincide con tus preferencias');
     }

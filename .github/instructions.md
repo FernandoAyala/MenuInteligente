@@ -16,8 +16,8 @@
 		- Repositories -> Acceso a Firestore.
 - Integraciones: 
 	- LLM: (Gemini 2.0)
-	- Base de Datos: Firestore + 
-	- Tiempo Real: Socket.io
+	- Base de Datos: Firestore
+	- Tiempo Real: Socket.io (Pendiente)
 - Seguridad: 
 	- Sin CORS (Backend y Frontend integrados)
 	- Autenticación simple para tener historial del cliente.
@@ -25,7 +25,7 @@
 # Backend
 - Lenguaje: TypeScript
 - Runtime: Node.js 18+
-- Framework: Express.js + Socket.io
+- Framework: Express.js + Socket.io (Pendiente)
 - Validación: Zod
 - Base de Datos: firebase-admin SDK (Firestore)
 - Endpoints clave (MVP):
@@ -39,7 +39,7 @@
 - Lenguaje: TypeScript
 - Stack:
 	- Vite + React para interfaz de chat
-	- Socket.io-client para comunicación tiempo real
+	- Socket.io-client para comunicación tiempo real (Pendiente)
 	- UI: Tailwind CSS para estilos
 	- Estado: useState + useEffect
 	- Build: vite build genera carpeta dist/  

@@ -131,7 +131,13 @@ export class MenuItemRepository {
       isVegan: data.isVegan,
       isVegetarian: data.isVegetarian,
       isGlutenFree: data.isGlutenFree,
+      isLactoseFree: data.isLactoseFree || false,
+      isKosher: data.isKosher || false,
+      isHalal: data.isHalal || false,
+      isPaleo: data.isPaleo || false,
+      isKeto: data.isKeto || false,
       allergens: data.allergens || [],
+      tags: data.tags || [],
       available: data.available,
       createdAt,
     };

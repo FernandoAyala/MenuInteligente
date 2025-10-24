@@ -6,58 +6,156 @@
 
 /**
  * Prompt para extracción de intenciones del usuario
- * Analiza el mensaje y extrae:
- * - Intención principal
- * - Restricciones dietarias
- * - Alergias
- * - Presupuesto
- * - Preferencias generales
+ * Analiza el mensaje y extrae
  */
-export const INTENT_EXTRACTION_PROMPT = `Eres un asistente especializado en comprender las necesidades de clientes en un restaurante.
 
-Tu tarea es analizar el mensaje del usuario y extraer información estructurada en formato JSON.
+export const INTENT_EXTRACTION_PROMPT = `Eres un asistente avanzado de comprensión del lenguaje natural especializado en restaurantes.
 
-INTENCIONES POSIBLES:
-- saludo: Usuario solo saluda (ej: "hola", "buenos días", "hey") SIN pedir nada más
-- consultar_menu: Usuario quiere ver opciones disponibles
-- recomendar: Usuario pide sugerencias
-- agregar_al_pedido: Usuario quiere ordenar algo específico
-- preguntar_ingredientes: Usuario consulta sobre composición de platos
-- preguntar_precio: Usuario consulta precios
-- modificar_pedido: Usuario quiere cambiar su orden
-- finalizar_pedido: Usuario está listo para completar
-- consultar_restricciones: Usuario pregunta por opciones dietarias
-- queja_o_feedback: Usuario expresa insatisfacción o comentarios
+Tu misión es analizar mensajes de usuarios y extraer TODA la información relevante en un solo análisis completo.
 
-IMPORTANTE PARA SALUDOS:
-- Si el mensaje es SOLO un saludo sin ninguna otra petición, usa intent="saludo"
-- Ejemplos de saludo puro: "Hola", "Buenos días", "Hey", "Buenas tardes"
-- NO es saludo puro: "Hola, quiero vegetariano" (intent="recomendar"), "Buenas, qué hay en el menú" (intent="consultar_menu")
+1. INTENCIONES PRINCIPALES (OBLIGATORIO)
 
-ENTIDADES A EXTRAER (siempre en español):
-- dietaryRestrictions: Array de strings en español (ej: ["vegetariano", "vegano", "sin-gluten"])
-- allergens: Array de alérgenos mencionados en español (ej: ["nueces", "lácteos", "mariscos"])
-- budget: Objeto con min y max si se menciona presupuesto (ej: {"min": 0, "max": 2000})
-- dishesMetioned: Array de platos mencionados específicamente
-- quantity: Número de porciones/personas si se menciona
-- spicyLevel: String si menciona picante ("ninguno", "bajo", "medio", "alto")
-- mealType: String si especifica tipo de comida ("entrada", "principal", "postre", "bebida")
-- preferences: Array de otras preferencias en español (ej: ["ligero", "abundante", "fresco", "tradicional"])
+Identifica la intención principal usando EXACTAMENTE uno de estos valores:
 
-IMPORTANTE SOBRE mealType:
-- "entrada", "aperitivo" → mealType="entrada"
-- "plato principal", "plato fuerte", "segundo" → mealType="principal"
-- "postre", "dulce" → mealType="postre"
-- "bebida", "trago" → mealType="bebida"
-- "acompañamiento", "guarnición" → mealType="acompañamiento"
+* CONVERSACIONALES:
+  - "saludo": Solo saluda SIN pedir nada más (ej: "Hola", "Buenos días")
+  - "agradecer": Agradece o se despide (ej: "Gracias", "Chau")
 
-NO confundir con dietaryRestrictions:
-- "vegetariano", "vegano", "sin gluten" → dietaryRestrictions (NO mealType)
+* CONSULTAS:
+  - "consultar_menu": Quiere ver opciones disponibles (ej: "Qué tienen?", "Muéstrame el menú")
+  - "recomendar": Pide sugerencias personalizadas (ej: "Recomiéndame algo", "Qué me conviene?")
+  - "preguntar_precio": Consulta precio de plato específico (ej: "¿Cuánto cuesta la pizza?")
+  - "preguntar_ingredientes": Consulta composición de plato (ej: "¿Qué lleva el risotto?")
+  - "preguntar_disponibilidad": Consulta si hay un plato (ej: "¿Tienen empanadas?")
+  - "consultar_alergenos": Pregunta por alérgenos específicos (ej: "¿La pasta tiene nueces?")
 
-ANÁLISIS DE CONTEXTO:
-- Detecta si es una pregunta o una acción
-- Identifica el tono (urgente, casual, indeciso, molesto)
-- Detecta si necesita aclaración
+* ACCIONES DE PEDIDO:
+  - "agregar_al_pedido": Quiere ordenar algo específico (ej: "Quiero una pizza", "Dame dos empanadas")
+  - "modificar_pedido": Cambiar orden existente (ej: "Cambiá la pizza por ensalada")
+  - "cancelar_pedido": Cancelar orden (ej: "Cancelá mi pedido")
+  - "confirmar_pedido": Confirma y procede (ej: "Sí, confirmo", "Adelante")
+
+* OTRAS:
+  - "otro": Cualquier otra intención no clasificada
+
+* REGLAS CRÍTICAS PARA INTENCIONES:
+  - Si dice "Hola" + ALGO MÁS → NO es "saludo", usa la intención de lo que pide
+  - Si menciona plato específico + restricción → "recomendar" o "agregar_al_pedido"
+  - Si pregunta por categoría general → "consultar_menu"
+  - Si pide sugerencias → SIEMPRE "recomendar"
+
+2. EXTRACCIÓN DE ENTIDADES (CRÍTICO)
+
+Extrae TODAS las entidades mencionadas (SIEMPRE EN ESPAÑOL):
+
+* Variable: dietaryRestrictions (Array):
+  - Valores permitidos: ["vegetariano", "vegano", "sin-gluten", "sin-lactosa", "kosher", "halal", "paleo", "keto"]
+    - "vegetariano": no come carne ni pescado
+    - "vegano": no consume productos animales
+    - "sin-gluten": celíaco, no puede trigo/cebada/centeno
+    - "sin-lactosa": intolerancia a lácteos
+    - "kosher": sigue las leyes alimentarias judías (no mezcla carne y lácteos, solo carne de animales permitidos sacrificados ritualmente)
+    - "halal": sigue las leyes alimentarias islámicas (carne permitida solo si es halal, sin cerdo ni alcohol)
+    - "paleo": dieta basada en alimentos preagrícolas (carne, pescado, frutas, verduras, frutos secos; evita cereales, lácteos y procesados)
+    - "keto": dieta muy baja en carbohidratos y alta en grasas para inducir cetosis
+
+  - INFERENCIAS:
+    - "no como carne" → ["vegetariano"]
+    - "solo plantas" → ["vegano"]
+    - "celíaco" → ["sin-gluten"]
+    - "intolerante a la leche" → ["sin-lactosa"]
+    - "comida judía" / "mantengo dieta kosher" → ["kosher"]
+    - "no como cerdo" / "comida halal" → ["halal"]
+    - "dieta paleolítica" / "solo como natural, sin cereales" → ["paleo"]
+    - "dieta cetogénica" / "baja en carbohidratos" → ["keto"]
+
+* Variable: allergens (Array):
+  - Valores permitidos: ["gluten", "lácteos", "huevo", "pescado", "mariscos", "soja", "frutos secos", "sésamo"]
+  
+  - SEÑALES: "alérgico a", "me hace mal", "no puedo comer", "me da alergia", "me sienta mal", "evito", "no tolero"
+  
+  - INFERENCIAS:
+    - "nueces" → "frutos secos"
+    - "almendras" → "frutos secos"
+    - "maní" / "cacahuate" → "frutos secos"
+    - "avellanas" → "frutos secos"
+    - "leche" → "lácteos"
+    - "queso" → "lácteos"
+    - "mantequilla" → "lácteos"
+    - "yogur" / "yogurt" → "lácteos"
+    - "camarones" → "mariscos"
+    - "langostinos" → "mariscos"
+    - "mejillones" / "almejas" / "ostras" → "mariscos"
+    - "pan" / "harina" / "trigo" / "cebada" / "centeno" → "gluten"
+    - "soja" / "tofu" → "soja"
+    - "huevo" / "claras" / "yemas" → "huevo"
+    - "atún" / "salmón" / "merluza" → "pescado"
+    - "sésamo" / "ajonjolí" → "sésamo"
+
+  - SEVERIDAD IMPLÍCITA: Si menciona "alergia" → CRÍTICO, requiere exclusión total
+
+* Variable: budget (Object | null):
+  - Formato: {"min": number, "max": number} en ARS
+
+  - SEÑALES DIRECTAS: "$2000", "hasta $1500", "entre $1000 y $2000"
+  - SEÑALES INDIRECTAS:
+    - "económico", "barato", "accesible" → {"min": 0, "max": 3000}
+    - "promedio", "normal" → {"min": 3000, "max": 6000}
+    - "premium", "fino" → {"min": 6000, "max": 15000}
+    - "lo que sea", "precio no importa" → {"min": 0, "max": 100000}
+
+* Variable: dishesMetioned (Array):
+  - Nombres de platos mencionados explícitamente
+  - Ejemplos: ["pizza margarita"], ["ensalada césar", "brownie"]
+
+* Variable: quantity (number | null):
+  - Número de porciones/personas mencionadas
+  - Ejemplos: "dos pizzas" → 2, "para tres personas" → 3
+
+* Variable: spicyLevel (string | null):
+  - Valores permitidos: "none" | "low" | "medium" | "high" | null
+  - Ejemplo:
+    - "sin picante", "nada picante", "suave" → "none"
+    - "poco picante", "leve" → "low"
+    - "medio picante", "moderado" → "medium"
+    - "muy picante", "picante", "caliente" → "high"
+
+* Variable: mealType (string | null):
+  - Valores permitidos: "entrada" | "principal" | "postre" | "bebida" | "acompañamiento" | null
+  - Ejemplo:
+    - "entrada", "aperitivo", "starter" → "entrada"
+    - "plato principal", "plato fuerte", "segundo", "main" → "principal"
+    - "postre", "dulce", "dessert" → "postre"
+    - "bebida", "trago", "drink" → "bebida"
+    - "acompañamiento", "guarnición", "side" → "acompañamiento"
+  - NO CONFUNDIR: "vegetariano" NO es mealType, es dietaryRestriction
+
+* Variable: preferences (Array):
+  - Valores permitidos con respecto al plato: ["ligero", "abundante", "fresco", "tradicional", "casero", "gourmet", "rápido"]
+  - Valores permitidos con respecto al lugar de origen: Ejemplo ["asiático"] | ["italiano"]
+  - Valores permitidos con respecto a los ingredientes. Ejemplo ["quinoa", "tomate", "limón"]
+  - Ejemplo final compuesto: ["ligero", "peruano", "limón", "cebolla morada", "cilantro", "maíz"] 
+
+3. ANÁLISIS DE CONTEXTO (IMPORTANTE)
+
+Analiza el contexto y estado de la conversación:
+
+* Variable: isQuestion (boolean):
+  - ¿El mensaje es una pregunta? Busca "?", "qué", "cómo", "cuál", "cuánto"
+
+* Variable: tone (string):
+  - "casual": tono relajado, informal
+  - "formal": tono educado, formal
+  - "urgent": apurado, necesita rápido
+  - "frustrated": molesto, insatisfecho
+  - "enthusiastic": entusiasmado, positivo
+
+* Variable: needsClarification (boolean):
+  - true si falta información crítica para proceder
+  - Ejemplos que necesitan aclaración:
+    - "Quiero algo" (¿qué tipo?)
+    - "Dame comida" (¿qué categoría?)
+    - "Tengo alergias" (¿cuáles específicamente?)
 
 Responde SOLO en formato JSON, sin markdown ni texto adicional:
 {
@@ -79,292 +177,68 @@ Responde SOLO en formato JSON, sin markdown ni texto adicional:
     "needsClarification": false
   },
   "confidence": 0.95
-}`;
-
-/**
- * Prompt para análisis de restricciones dietarias específicas
- */
-export const DIETARY_ANALYSIS_PROMPT = `Eres un experto nutricionista especializado en restricciones dietarias.
-
-Analiza el mensaje del usuario e identifica TODAS las restricciones alimentarias mencionadas, tanto explícitas como implícitas.
-
-RESTRICCIONES COMUNES:
-- Vegetariano: no come carne ni pescado
-- Vegano: no consume productos de origen animal
-- Sin gluten (celíaco): no puede consumir trigo, cebada, centeno
-- Sin lactosa: no puede consumir productos lácteos
-- Kosher: restricciones alimentarias judías
-- Halal: restricciones alimentarias islámicas
-- Paleo: evita granos, lácteos, legumbres, azúcares procesados
-- Keto: bajo en carbohidratos, alto en grasas
-- Sin azúcar: diabético o por preferencia
-- Bajo en sodio: por hipertensión u otra condición
-
-ANÁLISIS IMPLÍCITO:
-- Si dice "no como carne" → vegetariano
-- Si dice "solo plantas" → vegano probable
-- Si pregunta por "opciones sin harinas" → posible celíaco
-- Si menciona "problemas con lácteos" → intolerancia lactosa
-
-Responde en JSON (IMPORTANTE: valores en español):
-{
-  "restrictions": ["vegetariano", "vegano", "sin-gluten", etc],
-  "certainty": "alta|media|baja",
-  "suggestedQuestions": ["pregunta para aclarar si aplica"],
-  "warnings": ["advertencias importantes a considerar"]
-}`;
-
-/**
- * Prompt para análisis de alergias y sensibilidades
- */
-export const ALLERGY_DETECTION_PROMPT = `Eres un especialista en seguridad alimentaria enfocado en alergias.
-
-Analiza el mensaje e identifica TODAS las alergias o sensibilidades mencionadas. Esto es CRÍTICO para la seguridad del cliente.
-
-ALÉRGENOS COMUNES (los 14 principales):
-1. Cacahuetes/maní
-2. Frutos secos (almendras, nueces, avellanas, etc)
-3. Gluten/cereales con gluten
-4. Crustáceos (camarones, langosta, cangrejo)
-5. Huevos
-6. Pescado
-7. Soja
-8. Leche/lácteos
-9. Apio
-10. Mostaza
-11. Sésamo
-12. Sulfitos
-13. Altramuces
-14. Moluscos
-
-NIVELES DE SEVERIDAD (en español):
-- critico: puede ser mortal (ej: anafilaxia)
-- severo: reacción grave pero no mortal
-- moderado: incomodidad significativa
-- leve: molestia menor
-
-SEÑALES DE ALERTA:
-- Palabras clave: "alérgico", "alergia", "no puedo comer", "me hace mal", "reacción"
-- Menciones de EpiPen o medicamentos
-- Referencias a reacciones previas
-- Solicitudes específicas de verificación de ingredientes
-
-Responde en JSON (IMPORTANTE: valores en español):
-{
-  "allergens": [
-    {
-      "allergen": "nombre_alérgeno_en_español",
-      "severity": "critico|severo|moderado|leve",
-      "mentioned": "explicito|implicito"
-    }
-  ],
-  "requiresStrictAvoidance": true,
-  "crossContaminationConcern": true,
-  "suggestedVerifications": ["verificación necesaria antes de servir"],
-  "recommendedDisclaimer": "texto legal recomendado"
-}`;
-
-/**
- * Prompt para análisis de presupuesto y preferencias de precio
- */
-export const BUDGET_ANALYSIS_PROMPT = `Eres un asesor financiero especializado en restaurantes.
-
-Analiza el mensaje del usuario para identificar restricciones o preferencias de presupuesto.
-
-SEÑALES DIRECTAS:
-- Menciones de cantidades específicas ("hasta $2000", "máximo $500")
-- Rangos de precio ("entre $1000 y $1500")
-- Referencias a eventos ("presupuesto para 4 personas")
-
-SEÑALES INDIRECTAS:
-- "económico", "barato", "accesible" → presupuesto bajo
-- "premium", "fino", "elegante" → presupuesto alto
-- "promedio", "normal", "razonable" → presupuesto medio
-- "precio no importa", "lo mejor" → presupuesto ilimitado
-
-CONTEXTO ARGENTINO:
-- Entrada promedio: $1500-$3000
-- Plato principal: $4000-$8000
-- Postre: $2000-$3500
-- Bebida: $1000-$3000
-- Menú completo por persona: $7000-$15000
-
-Responde en JSON (IMPORTANTE: valores en español):
-{
-  "budgetRange": {
-    "min": 0,
-    "max": null,
-    "currency": "ARS",
-    "perPerson": true
-  },
-  "pricePreference": "economico|medio|premium|lujo",
-  "flexibility": "estricto|moderado|flexible",
-  "confidence": 0.90,
-  "suggestedCategories": ["categorías de menú que se ajustan"]
-}`;
-
-/**
- * Prompt para comprensión contextual de conversaciones
- */
-export const CONTEXT_UNDERSTANDING_PROMPT = `Eres un analista de conversaciones especializado en experiencias de restaurante.
-
-Analiza el CONTEXTO y FLUJO de la conversación para entender:
-
-1. ETAPA DE LA CONVERSACIÓN:
-   - inicial: primer contacto
-   - explorando: viendo opciones
-   - decidiendo: comparando alternativas
-   - confirmando: listo para ordenar
-   - completando: finalizando pedido
-   - post-venta: después de ordenar
-
-2. ESTADO EMOCIONAL:
-   - entusiasmado: muy interesado
-   - indeciso: necesita ayuda
-   - apurado: quiere decidir rápido
-   - frustrado: ha tenido problemas
-   - satisfecho: contento con el servicio
-
-3. INFORMACIÓN PENDIENTE:
-   - ¿Qué información crítica falta?
-   - ¿Qué preguntas deberíamos hacer?
-   - ¿Hay ambigüedades que resolver?
-
-4. PRÓXIMOS PASOS LÓGICOS:
-   - ¿Qué debería hacer el sistema a continuación?
-   - ¿Qué opciones presentar?
-   - ¿Necesita recomendaciones?
-
-Responde en JSON:
-{
-  "conversationStage": "etapa",
-  "emotionalState": "estado",
-  "missingInfo": ["info1", "info2"],
-  "clarificationsNeeded": ["pregunta1", "pregunta2"],
-  "suggestedNextSteps": ["acción1", "acción2"],
-  "urgency": "low|medium|high",
-  "confidence": 0.85
-}`;
-
-/**
- * Prompt para detección de intención de múltiples acciones
- */
-export const MULTI_INTENT_DETECTION_PROMPT = `Eres un experto en análisis de lenguaje natural para restaurantes.
-
-Los usuarios frecuentemente expresan MÚLTIPLES intenciones en un solo mensaje.
-Tu trabajo es detectar TODAS las intenciones presentes y su orden de prioridad.
-
-EJEMPLOS:
-- "Quiero algo vegetariano y sin gluten, que sea barato" 
-  → [recomendar (primary), consultar_restricciones (secondary), consultar_precio (secondary)]
-  
-- "Agregá la ensalada césar y preguntame qué postres tienen"
-  → [agregar_al_pedido (primary), consultar_menu (primary)]
-  
-- "¿El risotto tiene mariscos? Si no tiene, me lo llevás"
-  → [preguntar_ingredientes (primary), agregar_al_pedido (conditional)]
-
-Responde en JSON:
-{
-  "intents": [
-    {
-      "intent": "nombre_intencion",
-      "priority": "primary|secondary|conditional",
-      "entities": {},
-      "condition": "condición si es condicional"
-    }
-  ],
-  "executionOrder": ["intent1", "intent2"],
-  "requiresSequentialProcessing": true,
-  "complexity": "simple|moderate|complex"
-}`;
+}`
 
 /**
  * Objeto con todos los prompts exportados
  */
 export const NLUPrompts = {
-  intentExtraction: INTENT_EXTRACTION_PROMPT,
-  dietaryAnalysis: DIETARY_ANALYSIS_PROMPT,
-  allergyDetection: ALLERGY_DETECTION_PROMPT,
-  budgetAnalysis: BUDGET_ANALYSIS_PROMPT,
-  contextUnderstanding: CONTEXT_UNDERSTANDING_PROMPT,
-  multiIntentDetection: MULTI_INTENT_DETECTION_PROMPT,
+  intentExtraction: INTENT_EXTRACTION_PROMPT
 } as const;
 
 /**
- * Tipos para las respuestas esperadas de cada prompt
+ * Tipos para las respuestas esperadas del prompt INTENT_EXTRACTION_PROMPT
+ * Todos los valores están en ESPAÑOL para coincidir exactamente con el prompt
  */
 export interface IntentExtractionResult {
-  intent: string;
+  // Intención principal: una de las 13 definidas en el prompt
+  intent: 'saludo' | 'agradecer' | 'consultar_menu' | 'recomendar' | 
+          'preguntar_precio' | 'preguntar_ingredientes' | 'preguntar_disponibilidad' | 
+          'consultar_alergenos' | 'agregar_al_pedido' | 'modificar_pedido' | 
+          'cancelar_pedido' | 'confirmar_pedido' | 'otro';
+  
+  // Sub-intención opcional (para casos específicos)
   subIntent?: string;
+  
+  // Entidades extraídas del mensaje
   entities: {
+    // Restricciones dietarias: ["vegetariano", "vegano", "sin-gluten", "sin-lactosa", "kosher", "halal", "paleo", "keto"]
     dietaryRestrictions: string[];
+    
+    // Alérgenos: ["gluten", "lácteos", "huevo", "pescado", "mariscos", "soja", "frutos secos", "sésamo"]
     allergens: string[];
+    
+    // Presupuesto en ARS
     budget: { min: number; max: number | null } | null;
+    
+    // Platos mencionados explícitamente
     dishesMetioned: string[];
+    
+    // Cantidad de porciones/personas
     quantity: number | null;
+    
+    // Nivel de picante: "none" | "low" | "medium" | "high"
     spicyLevel: 'none' | 'low' | 'medium' | 'high' | null;
-    mealType: 'appetizer' | 'main' | 'dessert' | 'beverage' | null;
+    
+    // Tipo de comida: "entrada" | "principal" | "postre" | "bebida" | "acompañamiento" (EN ESPAÑOL)
+    mealType: 'entrada' | 'principal' | 'postre' | 'bebida' | 'acompañamiento' | null;
+    
+    // Preferencias: ["ligero", "abundante", "fresco", "tradicional", "casero", "gourmet", "rápido"]
     preferences: string[];
   };
+  
+  // Contexto de la conversación
   context: {
+    // ¿Es una pregunta?
     isQuestion: boolean;
+    
+    // Tono: "casual" | "formal" | "urgente" | "frustrado" | "entusiasmado"
     tone: string;
+    
+    // ¿Necesita más información para proceder?
     needsClarification: boolean;
   };
+  
+  // Confianza del análisis (0.0 - 1.0)
   confidence: number;
-}
-
-export interface DietaryAnalysisResult {
-  restrictions: string[];
-  certainty: 'high' | 'medium' | 'low';
-  suggestedQuestions: string[];
-  warnings: string[];
-}
-
-export interface AllergyDetectionResult {
-  allergens: Array<{
-    allergen: string;
-    severity: 'critical' | 'severe' | 'moderate' | 'mild';
-    mentioned: 'explicitly' | 'implicitly';
-  }>;
-  requiresStrictAvoidance: boolean;
-  crossContaminationConcern: boolean;
-  suggestedVerifications: string[];
-  recommendedDisclaimer: string;
-}
-
-export interface BudgetAnalysisResult {
-  budgetRange: {
-    min: number;
-    max: number | null;
-    currency: string;
-    perPerson: boolean;
-  };
-  pricePreference: 'budget' | 'economic' | 'mid-range' | 'premium' | 'luxury';
-  flexibility: 'strict' | 'moderate' | 'flexible';
-  confidence: number;
-  suggestedCategories: string[];
-}
-
-export interface ContextUnderstandingResult {
-  conversationStage: 'inicial' | 'explorando' | 'decidiendo' | 'confirmando' | 'completando' | 'post-venta';
-  emotionalState: 'entusiasmado' | 'indeciso' | 'apurado' | 'frustrado' | 'satisfecho';
-  missingInfo: string[];
-  clarificationsNeeded: string[];
-  suggestedNextSteps: string[];
-  urgency: 'low' | 'medium' | 'high';
-  confidence: number;
-}
-
-export interface MultiIntentDetectionResult {
-  intents: Array<{
-    intent: string;
-    priority: 'primary' | 'secondary' | 'conditional';
-    entities: Record<string, any>;
-    condition?: string;
-  }>;
-  executionOrder: string[];
-  requiresSequentialProcessing: boolean;
-  complexity: 'simple' | 'moderate' | 'complex';
 }

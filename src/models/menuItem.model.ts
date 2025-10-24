@@ -13,11 +13,11 @@ export enum SpicyLevel {
  * Categorías de items del menú
  */
 export enum MenuCategory {
-  APPETIZER = 'appetizer',
-  MAIN_COURSE = 'main_course',
-  DESSERT = 'dessert',
-  BEVERAGE = 'beverage',
-  SIDE_DISH = 'side_dish',
+  APPETIZER = 'entrada',
+  MAIN_COURSE = 'principal',
+  DESSERT = 'postre',
+  BEVERAGE = 'bebida',
+  SIDE_DISH = 'acompañamiento',
 }
 
 /**
@@ -34,7 +34,13 @@ export interface MenuItem {
   isVegan: boolean;
   isVegetarian: boolean;
   isGlutenFree: boolean;
+  isLactoseFree: boolean;
+  isKosher: boolean;
+  isHalal: boolean;
+  isPaleo: boolean;
+  isKeto: boolean;
   allergens: string[];
+  tags?: string[];
   available: boolean;
   createdAt: Date;
 }

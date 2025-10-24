@@ -8,22 +8,26 @@ const router: Router = Router();
  * POST /api/orders
  * Crear una nueva comanda desde el carrito
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const { tableNumber, sessionId, cartItems, customerNotes } = req.body;
 
     if (!tableNumber || !sessionId || !cartItems || !Array.isArray(cartItems)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Missing required fields: tableNumber, sessionId, cartItems',
       });
+
+      return;
     }
 
     if (cartItems.length === 0) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Cart is empty',
       });
+
+      return;
     }
 
     const order = await orderService.createFromCart(
@@ -37,12 +41,17 @@ router.post('/', async (req: Request, res: Response) => {
       success: true,
       data: order,
     });
+
+
+    return;
   } catch (error: unknown) {
     console.error('Error creating order:', error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -50,7 +59,7 @@ router.post('/', async (req: Request, res: Response) => {
  * GET /api/orders
  * Obtener todas las comandas activas (para el tablero de cocina)
  */
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response): Promise<void> => {
   try {
     const orders = await orderService.getActiveOrders();
 
@@ -64,6 +73,8 @@ router.get('/', async (_req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -71,16 +82,18 @@ router.get('/', async (_req: Request, res: Response) => {
  * GET /api/orders/:id
  * Obtener una comanda por ID
  */
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const order = await orderService.getById(id);
 
     if (!order) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: 'Order not found',
       });
+
+      return;
     }
 
     res.json({
@@ -93,6 +106,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -100,24 +115,28 @@ router.get('/:id', async (req: Request, res: Response) => {
  * PATCH /api/orders/:id/status
  * Actualizar el estado de una comanda
  */
-router.patch('/:id/status', async (req: Request, res: Response) => {
+router.patch('/:id/status', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { status, cancelReason } = req.body;
 
     if (!status) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Missing required field: status',
       });
+
+      return;
     }
 
     // Validar que el estado sea válido
     if (!Object.values(OrderStatus).includes(status)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: `Invalid status. Must be one of: ${Object.values(OrderStatus).join(', ')}`,
       });
+
+      return;
     }
 
     const order = await orderService.updateStatus(id, status, cancelReason);
@@ -130,23 +149,29 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
     console.error('Error updating order status:', error);
     
     if (error instanceof Error && error.message.includes('not found')) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: error.message,
       });
+
+      return;
     }
 
     if (error instanceof Error && error.message.includes('Invalid status transition')) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: error.message,
       });
+
+      return;
     }
 
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -154,15 +179,17 @@ router.patch('/:id/status', async (req: Request, res: Response) => {
  * GET /api/orders/status/:status
  * Obtener comandas por estado
  */
-router.get('/status/:status', async (req: Request, res: Response) => {
+router.get('/status/:status', async (req: Request, res: Response): Promise<void> => {
   try {
     const { status } = req.params;
 
     if (!Object.values(OrderStatus).includes(status as OrderStatus)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: `Invalid status. Must be one of: ${Object.values(OrderStatus).join(', ')}`,
       });
+
+      return;
     }
 
     const orders = await orderService.getOrdersByStatus(status as OrderStatus);
@@ -177,6 +204,8 @@ router.get('/status/:status', async (req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -184,15 +213,17 @@ router.get('/status/:status', async (req: Request, res: Response) => {
  * GET /api/orders/table/:tableNumber
  * Obtener comandas de una mesa
  */
-router.get('/table/:tableNumber', async (req: Request, res: Response) => {
+router.get('/table/:tableNumber', async (req: Request, res: Response): Promise<void> => {
   try {
     const tableNumber = parseInt(req.params.tableNumber);
 
     if (isNaN(tableNumber)) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Invalid table number',
       });
+
+      return;
     }
 
     const orders = await orderService.getOrdersByTable(tableNumber);
@@ -207,6 +238,8 @@ router.get('/table/:tableNumber', async (req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -214,7 +247,7 @@ router.get('/table/:tableNumber', async (req: Request, res: Response) => {
  * GET /api/orders/session/:sessionId
  * Obtener comandas de una sesión
  */
-router.get('/session/:sessionId', async (req: Request, res: Response) => {
+router.get('/session/:sessionId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
     const orders = await orderService.getOrdersBySession(sessionId);
@@ -229,6 +262,8 @@ router.get('/session/:sessionId', async (req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -236,16 +271,18 @@ router.get('/session/:sessionId', async (req: Request, res: Response) => {
  * GET /api/orders/stats/daily
  * Obtener estadísticas del día
  */
-router.get('/stats/daily', async (req: Request, res: Response) => {
+router.get('/stats/daily', async (req: Request, res: Response): Promise<void> => {
   try {
     const dateParam = req.query.date as string;
     const date = dateParam ? new Date(dateParam) : new Date();
 
     if (isNaN(date.getTime())) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Invalid date format',
       });
+
+      return;
     }
 
     const stats = await orderService.getDailyStats(date);
@@ -260,6 +297,8 @@ router.get('/stats/daily', async (req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -267,7 +306,7 @@ router.get('/stats/daily', async (req: Request, res: Response) => {
  * GET /api/orders/stats/today
  * Obtener todas las comandas del día
  */
-router.get('/stats/today', async (_req: Request, res: Response) => {
+router.get('/stats/today', async (_req: Request, res: Response): Promise<void> => {
   try {
     const orders = await orderService.getTodayOrders();
 
@@ -281,6 +320,8 @@ router.get('/stats/today', async (_req: Request, res: Response) => {
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+    return;
   }
 });
 
@@ -288,16 +329,18 @@ router.get('/stats/today', async (_req: Request, res: Response) => {
  * DELETE /api/orders/:id/cancel
  * Cancelar una comanda
  */
-router.delete('/:id/cancel', async (req: Request, res: Response) => {
+router.delete('/:id/cancel', async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
 
     if (!reason) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Missing required field: reason',
       });
+
+      return;
     }
 
     const order = await orderService.cancelOrder(id, reason);
@@ -310,16 +353,21 @@ router.delete('/:id/cancel', async (req: Request, res: Response) => {
     console.error('Error cancelling order:', error);
     
     if (error instanceof Error && error.message.includes('not found')) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: error.message,
       });
+
+      return;
     }
 
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
     });
+
+
+    return;
   }
 });
 

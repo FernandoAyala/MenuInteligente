@@ -25,6 +25,12 @@ export enum ChatActionType {
   REMOVE_FROM_CART = 'remove_from_cart',
   UPDATE_QUANTITY = 'update_quantity',
   REQUEST_RECOMMENDATION = 'request_recommendation',
+  VIEW_ITEM_DETAILS = 'view_item_details',        // Para preguntar_precio, preguntar_ingredientes
+  CHECK_AVAILABILITY = 'check_availability',      // Para preguntar_disponibilidad
+  VIEW_ALLERGENS = 'view_allergens',              // Para consultar_alergenos
+  MODIFY_ORDER = 'modify_order',                  // Para modificar_pedido
+  CANCEL_ORDER = 'cancel_order',                  // Para cancelar_pedido
+  CONFIRM_ORDER = 'confirm_order',                // Para confirmar_pedido
 }
 
 /**

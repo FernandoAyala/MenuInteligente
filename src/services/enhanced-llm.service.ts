@@ -2,12 +2,7 @@ import { LLMProviderFactory } from '../providers/llm.factory';
 import { ILLMProvider, LLMMessage, LLMProviderType, MessageRole } from '../interfaces/llm.interface';
 import { 
   NLUPrompts, 
-  IntentExtractionResult, 
-  DietaryAnalysisResult,
-  AllergyDetectionResult,
-  BudgetAnalysisResult,
-  ContextUnderstandingResult,
-  MultiIntentDetectionResult 
+  IntentExtractionResult
 } from '../prompts/nlu.prompts';
 import {
   GenerationPrompts,
@@ -74,183 +69,6 @@ export class EnhancedLLMService {
     }
   }
 
-  /**
-   * Analiza restricciones dietarias específicas
-   */
-  async analyzeDietaryRestrictions(userMessage: string): Promise<DietaryAnalysisResult> {
-    const systemPrompt: LLMMessage = {
-      role: MessageRole.SYSTEM,
-      content: NLUPrompts.dietaryAnalysis,
-    };
-
-    const userPrompt: LLMMessage = {
-      role: MessageRole.USER,
-      content: userMessage,
-    };
-
-    try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.2,
-        maxTokens: 500,
-      });
-
-      return this.parseStructuredResponse<DietaryAnalysisResult>(response.content);
-    } catch (error) {
-      console.error('Error analyzing dietary restrictions:', error);
-      return {
-        restrictions: [],
-        certainty: 'low',
-        suggestedQuestions: [],
-        warnings: [],
-      };
-    }
-  }
-
-  /**
-   * Detecta alergias con análisis de severidad
-   * CRÍTICO para seguridad del cliente
-   */
-  async detectAllergies(userMessage: string): Promise<AllergyDetectionResult> {
-    const systemPrompt: LLMMessage = {
-      role: MessageRole.SYSTEM,
-      content: NLUPrompts.allergyDetection,
-    };
-
-    const userPrompt: LLMMessage = {
-      role: MessageRole.USER,
-      content: userMessage,
-    };
-
-    try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.1, // Muy baja para máxima precisión en tema crítico
-        maxTokens: 600,
-      });
-
-      return this.parseStructuredResponse<AllergyDetectionResult>(response.content);
-    } catch (error) {
-      console.error('Error detecting allergies:', error);
-      // Default seguro: asumir que SÍ hay alergia si hubo error
-      return {
-        allergens: [],
-        requiresStrictAvoidance: true,
-        crossContaminationConcern: true,
-        suggestedVerifications: ['Verificar todos los ingredientes manualmente'],
-        recommendedDisclaimer: 'Por seguridad, consulte con el personal',
-      };
-    }
-  }
-
-  /**
-   * Analiza presupuesto y preferencias de precio
-   */
-  async analyzeBudget(userMessage: string): Promise<BudgetAnalysisResult> {
-    const systemPrompt: LLMMessage = {
-      role: MessageRole.SYSTEM,
-      content: NLUPrompts.budgetAnalysis,
-    };
-
-    const userPrompt: LLMMessage = {
-      role: MessageRole.USER,
-      content: userMessage,
-    };
-
-    try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.3,
-        maxTokens: 400,
-      });
-
-      return this.parseStructuredResponse<BudgetAnalysisResult>(response.content);
-    } catch (error) {
-      console.error('Error analyzing budget:', error);
-      return {
-        budgetRange: { min: 0, max: null, currency: 'ARS', perPerson: true },
-        pricePreference: 'mid-range',
-        flexibility: 'flexible',
-        confidence: 0.0,
-        suggestedCategories: [],
-      };
-    }
-  }
-
-  /**
-   * Detecta múltiples intenciones en un mensaje
-   */
-  async detectMultipleIntents(userMessage: string): Promise<MultiIntentDetectionResult> {
-    const systemPrompt: LLMMessage = {
-      role: MessageRole.SYSTEM,
-      content: NLUPrompts.multiIntentDetection,
-    };
-
-    const userPrompt: LLMMessage = {
-      role: MessageRole.USER,
-      content: userMessage,
-    };
-
-    try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.3,
-        maxTokens: 600,
-      });
-
-      return this.parseStructuredResponse<MultiIntentDetectionResult>(response.content);
-    } catch (error) {
-      console.error('Error detecting multiple intents:', error);
-      return {
-        intents: [],
-        executionOrder: [],
-        requiresSequentialProcessing: false,
-        complexity: 'simple',
-      };
-    }
-  }
-
-  // ============================================================================
-  // TASK #32: Manejo de contexto conversacional
-  // ============================================================================
-
-  /**
-   * Comprende el contexto de la conversación
-   */
-  async understandContext(
-    conversationHistory: LLMMessage[]
-  ): Promise<ContextUnderstandingResult> {
-    const systemPrompt: LLMMessage = {
-      role: MessageRole.SYSTEM,
-      content: NLUPrompts.contextUnderstanding,
-    };
-
-    const historyText = conversationHistory
-      .map(msg => `${msg.role}: ${msg.content}`)
-      .join('\n');
-
-    const userPrompt: LLMMessage = {
-      role: MessageRole.USER,
-      content: `Analiza esta conversación:\n\n${historyText}`,
-    };
-
-    try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.4,
-        maxTokens: 500,
-      });
-
-      return this.parseStructuredResponse<ContextUnderstandingResult>(response.content);
-    } catch (error) {
-      console.error('Error understanding context:', error);
-      return {
-        conversationStage: 'inicial',
-        emotionalState: 'indeciso',
-        missingInfo: [],
-        clarificationsNeeded: [],
-        suggestedNextSteps: [],
-        urgency: 'low',
-        confidence: 0.0,
-      };
-    }
-  }
-
   // ============================================================================
   // TASK #29, #30, #31: Generación de respuestas conversacionales
   // ============================================================================
@@ -308,24 +126,27 @@ ${JSON.stringify(params.intent.entities, null, 2)}`,
 
   /**
    * Responde consultas sobre ingredientes y alérgenos
+   * Usa IntentExtractionResult para obtener información de alergias
    */
   async answerIngredientQuery(params: {
     userMessage: string;
     dishId?: string;
     menuItems: any[];
-    allergyInfo?: AllergyDetectionResult;
+    intentData?: IntentExtractionResult; // Contiene entities.allergens
   }): Promise<string> {
     const dish = params.dishId 
       ? params.menuItems.find(item => item.id === params.dishId)
       : null;
 
+    const allergyInfo = params.intentData?.entities?.allergens || [];
+    
     const systemPrompt: LLMMessage = {
       role: MessageRole.SYSTEM,
       content: `${GenerationPrompts.ingredientInquiry}
 
 ${dish ? `PLATO CONSULTADO:\n${JSON.stringify(dish, null, 2)}` : ''}
 
-${params.allergyInfo ? `ALERGIAS DETECTADAS:\n${JSON.stringify(params.allergyInfo, null, 2)}` : ''}`,
+${allergyInfo.length > 0 ? `ALERGIAS DEL CLIENTE:\n${allergyInfo.join(', ')}` : ''}`,
     };
 
     const userPrompt: LLMMessage = {
@@ -348,16 +169,20 @@ ${params.allergyInfo ? `ALERGIAS DETECTADAS:\n${JSON.stringify(params.allergyInf
 
   /**
    * Maneja restricciones dietarias
+   * Usa IntentExtractionResult.entities.dietaryRestrictions
    */
   async handleDietaryRestrictions(params: {
     userMessage: string;
-    restrictions: DietaryAnalysisResult;
+    intentData: IntentExtractionResult;
     menuItems: any[];
   }): Promise<string> {
+    // Obtener restricciones del intent
+    const restrictions = params.intentData.entities.dietaryRestrictions || [];
+    
     // Filtrar menú por restricciones
     const suitableItems = this.filterMenuByDietaryRestrictions(
       params.menuItems,
-      params.restrictions.restrictions
+      restrictions
     );
 
     const systemPrompt: LLMMessage = {
@@ -365,7 +190,7 @@ ${params.allergyInfo ? `ALERGIAS DETECTADAS:\n${JSON.stringify(params.allergyInf
       content: `${GenerationPrompts.dietaryRestrictions}
 
 RESTRICCIONES DEL CLIENTE:
-${JSON.stringify(params.restrictions, null, 2)}
+${restrictions.join(', ')}
 
 OPCIONES ADECUADAS:
 ${JSON.stringify(suitableItems, null, 2)}`,
@@ -428,20 +253,24 @@ ${JSON.stringify(suitableItems, null, 2)}`,
 
   /**
    * Genera pregunta de seguimiento contextual
+   * Usa IntentExtractionResult.context para el análisis
    */
   async generateFollowUpQuestion(params: {
-    context: ContextUnderstandingResult;
     intent: IntentExtractionResult;
   }): Promise<string> {
     const systemPrompt: LLMMessage = {
       role: MessageRole.SYSTEM,
       content: `${GenerationPrompts.followUpQuestions}
 
-CONTEXTO ACTUAL:
-${JSON.stringify(params.context, null, 2)}
+CONTEXTO DE LA CONVERSACIÓN:
+- Tono: ${params.intent.context.tone}
+- Es pregunta: ${params.intent.context.isQuestion}
+- Necesita aclaración: ${params.intent.context.needsClarification}
 
 ÚLTIMA INTENCIÓN:
-${JSON.stringify(params.intent, null, 2)}`,
+- Intent: ${params.intent.intent}
+- Confianza: ${params.intent.confidence}
+- Entidades extraídas: ${JSON.stringify(params.intent.entities, null, 2)}`,
     };
 
     const userPrompt: LLMMessage = {
@@ -497,10 +326,11 @@ ${JSON.stringify(params.intent, null, 2)}`,
 
   /**
    * Valida y corrige respuesta de intención si tiene problemas
+   * Retorna intención "otro" (caso por defecto del prompt)
    */
   private getDefaultIntentResult(): IntentExtractionResult {
     return {
-      intent: 'unknown',
+      intent: 'otro', // "otro" es la intención por defecto según el prompt
       entities: {
         dietaryRestrictions: [],
         allergens: [],
@@ -513,7 +343,7 @@ ${JSON.stringify(params.intent, null, 2)}`,
       },
       context: {
         isQuestion: true,
-        tone: 'neutral',
+        tone: 'casual',
         needsClarification: true,
       },
       confidence: 0.0,
@@ -528,13 +358,34 @@ ${JSON.stringify(params.intent, null, 2)}`,
     return menuItems.filter(item => {
       // Filtrar por restricciones dietarias
       if (intent.entities.dietaryRestrictions.length > 0) {
-        const hasRestrictionMatch = intent.entities.dietaryRestrictions.some(restriction => {
-          if (restriction.toLowerCase().includes('vegetarian') && !item.isVegetarian) return false;
-          if (restriction.toLowerCase().includes('vegan') && !item.isVegan) return false;
-          if (restriction.toLowerCase().includes('gluten') && !item.isGlutenFree) return false;
-          return true;
-        });
-        if (!hasRestrictionMatch) return false;
+        for (const restriction of intent.entities.dietaryRestrictions) {
+          const r = restriction.toLowerCase();
+          
+          if (r.includes('vegetarian') || r === 'vegetariano') {
+            if (!item.isVegetarian) return false;
+          }
+          if (r.includes('vegan') || r === 'vegano') {
+            if (!item.isVegan) return false;
+          }
+          if (r.includes('gluten') || r === 'sin-gluten') {
+            if (!item.isGlutenFree) return false;
+          }
+          if (r.includes('lactose') || r === 'sin-lactosa') {
+            if (!item.isLactoseFree) return false;
+          }
+          if (r === 'kosher') {
+            if (!item.isKosher) return false;
+          }
+          if (r === 'halal') {
+            if (!item.isHalal) return false;
+          }
+          if (r === 'paleo') {
+            if (!item.isPaleo) return false;
+          }
+          if (r === 'keto') {
+            if (!item.isKeto) return false;
+          }
+        }
       }
 
       // Filtrar por alergenos
@@ -571,6 +422,12 @@ ${JSON.stringify(params.intent, null, 2)}`,
         if (itemLevel > requestedLevel) return false;
       }
 
+      // Filtrar por preferencias (usando tags)
+      if (intent.entities.preferences.length > 0 && item.tags && item.tags.length > 0) {
+        // No es filtro duro, pero priorizamos items que tienen tags que coinciden
+        // Si el item no tiene tags, no lo descartamos, solo lo depriorizamos en el scoring
+      }
+
       return item.available !== false;
     });
   }
@@ -579,9 +436,30 @@ ${JSON.stringify(params.intent, null, 2)}`,
     return menuItems.filter(item => {
       for (const restriction of restrictions) {
         const r = restriction.toLowerCase();
-        if (r.includes('vegetarian') && !item.isVegetarian) return false;
-        if (r.includes('vegan') && !item.isVegan) return false;
-        if (r.includes('gluten') && !item.isGlutenFree) return false;
+        if (r.includes('vegetarian') || r === 'vegetariano') {
+          if (!item.isVegetarian) return false;
+        }
+        if (r.includes('vegan') || r === 'vegano') {
+          if (!item.isVegan) return false;
+        }
+        if (r.includes('gluten') || r === 'sin-gluten') {
+          if (!item.isGlutenFree) return false;
+        }
+        if (r.includes('lactose') || r === 'sin-lactosa') {
+          if (!item.isLactoseFree) return false;
+        }
+        if (r === 'kosher') {
+          if (!item.isKosher) return false;
+        }
+        if (r === 'halal') {
+          if (!item.isHalal) return false;
+        }
+        if (r === 'paleo') {
+          if (!item.isPaleo) return false;
+        }
+        if (r === 'keto') {
+          if (!item.isKeto) return false;
+        }
       }
       return item.available !== false;
     });

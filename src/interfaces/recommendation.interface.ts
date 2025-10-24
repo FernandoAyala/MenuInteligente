@@ -52,6 +52,9 @@ export interface UserPreferences {
   /** Preferencia de categorías */
   preferredCategories?: string[];
   
+  /** Tags de preferencias (ligero, abundante, tradicional, casero, gourmet, rápido, fresco) */
+  tags?: string[];
+  
   /** Historial de pedidos previos */
   previousOrders?: string[];
   

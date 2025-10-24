@@ -159,6 +159,7 @@ export class ChatController {
                 spicyLevel: updatedSlots.spicyPreference,
                 mealType: intents.entities.mealType ? [intents.entities.mealType] : undefined,
                 preferredCategories: updatedSlots.preferredCategories || [],
+                tags: intents.entities.preferences || [], // Agregar tags de preferencias del intent
                 additionalNotes: chatRequest.message
               }
             }),
@@ -469,11 +470,74 @@ export class ChatController {
       return '¡Perfecto! Voy a procesar tu pedido. ¿Confirmas que todo está correcto?';
     }
 
-    // 7. RESPUESTA POR DEFECTO
-    return 'Entiendo. ¿En qué más puedo ayudarte? Puedo recomendarte platos, mostrarte el menú o ayudarte con tu pedido.';
-  }
+    // 7. VER DETALLES DE PLATO (precio, ingredientes)
+    if (actionTypes.includes(ChatActionType.VIEW_ITEM_DETAILS)) {
+      const action = actions.find(a => a.type === ChatActionType.VIEW_ITEM_DETAILS);
+      const dishes = action?.data?.dishes || intents.entities?.dishesMetioned || [];
+      const infoType = action?.data?.infoType || 'details';
+      
+      if (dishes.length === 0) {
+        return '¿Sobre qué plato te gustaría saber más? Puedo darte información sobre precios, ingredientes y detalles de preparación.';
+      }
+      
+      if (infoType === 'price') {
+        return `Claro, déjame consultar el precio de ${dishes.join(', ')}. Los precios de nuestros platos varían según los ingredientes y el tamaño. ¿Te gustaría que te recomiende algo en un rango de precio específico?`;
+      }
+      
+      if (infoType === 'ingredients') {
+        return `Por supuesto, te cuento sobre los ingredientes de ${dishes.join(', ')}. Este plato se prepara con ingredientes frescos seleccionados. ¿Tienes alguna alergia o restricción que deba considerar?`;
+      }
+      
+      return `Te puedo dar información detallada sobre ${dishes.join(', ')}. ¿Qué te gustaría saber específicamente?`;
+    }
 
-  /**
+    // 8. VERIFICAR DISPONIBILIDAD
+    if (actionTypes.includes(ChatActionType.CHECK_AVAILABILITY)) {
+      const action = actions.find(a => a.type === ChatActionType.CHECK_AVAILABILITY);
+      const dishes = action?.data?.dishes || intents.entities?.dishesMetioned || [];
+      
+      if (dishes.length === 0) {
+        return '¿Qué plato te gustaría saber si está disponible?';
+      }
+      
+      return `Déjame verificar si ${dishes.join(', ')} está disponible. Un momento...`;
+    }
+
+    // 9. VER ALÉRGENOS
+    if (actionTypes.includes(ChatActionType.VIEW_ALLERGENS)) {
+      const action = actions.find(a => a.type === ChatActionType.VIEW_ALLERGENS);
+      const dishes = action?.data?.dishes || intents.entities?.dishesMetioned || [];
+      const allergens = action?.data?.allergens || intents.entities?.allergens || [];
+      
+      if (dishes.length === 0 && allergens.length === 0) {
+        return '¿Sobre qué plato necesitas información de alérgenos? O si tienes alguna alergia específica, puedo recomendarte platos seguros.';
+      }
+      
+      if (allergens.length > 0) {
+        return `Entiendo que eres alérgico a ${allergens.join(', ')}. Te recomendaré solo platos que no contengan estos ingredientes. ¿Hay algo más que deba saber?`;
+      }
+      
+      return `Claro, te muestro los alérgenos que contiene ${dishes.join(', ')}. La seguridad alimentaria es nuestra prioridad.`;
+    }
+
+    // 10. MODIFICAR PEDIDO
+    if (actionTypes.includes(ChatActionType.MODIFY_ORDER)) {
+      return '¿Qué te gustaría modificar de tu pedido? Puedo cambiar cantidades, agregar o quitar platos.';
+    }
+
+    // 11. CANCELAR PEDIDO
+    if (actionTypes.includes(ChatActionType.CANCEL_ORDER)) {
+      return '¿Estás seguro de que deseas cancelar tu pedido? Si hay algún problema, puedo ayudarte a modificarlo en lugar de cancelarlo.';
+    }
+
+    // 12. CONFIRMAR PEDIDO
+    if (actionTypes.includes(ChatActionType.CONFIRM_ORDER)) {
+      return '¡Perfecto! Voy a confirmar tu pedido. Una vez confirmado, comenzaremos a prepararlo. ¿Todo está correcto?';
+    }
+
+    // 13. RESPUESTA POR DEFECTO
+    return 'Entiendo. ¿En qué más puedo ayudarte? Puedo recomendarte platos, mostrarte el menú o ayudarte con tu pedido.';
+  }  /**
    * Convierte intenciones del LLM a acciones del chat
    */
   private convertIntentsToActions(intents: any): ChatAction[] {
@@ -490,57 +554,76 @@ export class ChatController {
     const intentList = intents.intents || (intents.intent ? [{ type: intents.intent }] : []);
     const primaryIntent = intents.intent?.toLowerCase() || '';
 
-    // FILTRO DE SALUDOS: Si el intent principal es un saludo, no generar acciones
-    if (primaryIntent.includes('salud') || primaryIntent.includes('greet') || primaryIntent.includes('bienven')) {
-      logger.debug('Greeting intent detected, returning empty actions to allow conversational greeting');
+    // FILTRO DE INTENCIONES CONVERSACIONALES: saludo y agradecer no generan acciones
+    if (primaryIntent === 'saludo' || primaryIntent === 'agradecer') {
+      logger.debug('Conversational intent detected (saludo/agradecer), returning empty actions');
       return [];
     }
 
     logger.debug('Processing intents', { intentList, primaryIntent });
 
-    // Mapeo directo de intenciones del NLU prompt
-    if (primaryIntent.includes('consultar_menu') || primaryIntent.includes('ver_menu')) {
+    // ============================================================================
+    // MAPEO DIRECTO DE INTENCIONES PRINCIPALES DEL INTENT_EXTRACTION_PROMPT
+    // ============================================================================
+    
+    // CONVERSACIONALES (no generan acciones, se manejan arriba)
+    // - saludo
+    // - agradecer
+    
+    // CONSULTAS
+    if (primaryIntent === 'consultar_menu') {
       actions.push(createChatAction(ChatActionType.VIEW_MENU, 'Ver menú'));
     }
     
-    if (primaryIntent.includes('recomendar') || primaryIntent.includes('suger')) {
+    if (primaryIntent === 'recomendar') {
       actions.push(createChatAction(ChatActionType.REQUEST_RECOMMENDATION, 'Obtener recomendaciones'));
     }
     
-    if (primaryIntent.includes('agregar_al_pedido') || primaryIntent.includes('ordenar')) {
+    if (primaryIntent === 'preguntar_precio') {
+      actions.push(createChatAction(ChatActionType.VIEW_ITEM_DETAILS, 'Ver detalles de precio', {
+        infoType: 'price',
+        dishes: intents.entities?.dishesMetioned || []
+      }));
+    }
+
+    if (primaryIntent === 'preguntar_ingredientes') {
+      actions.push(createChatAction(ChatActionType.VIEW_ITEM_DETAILS, 'Ver ingredientes', {
+        infoType: 'ingredients',
+        dishes: intents.entities?.dishesMetioned || []
+      }));
+    }
+
+    if (primaryIntent === 'preguntar_disponibilidad') {
+      actions.push(createChatAction(ChatActionType.CHECK_AVAILABILITY, 'Verificar disponibilidad', {
+        dishes: intents.entities?.dishesMetioned || []
+      }));
+    }
+
+    if (primaryIntent === 'consultar_alergenos') {
+      actions.push(createChatAction(ChatActionType.VIEW_ALLERGENS, 'Ver alérgenos', {
+        dishes: intents.entities?.dishesMetioned || [],
+        allergens: intents.entities?.allergens || []
+      }));
+    }
+    
+    // ACCIONES DE PEDIDO
+    if (primaryIntent === 'agregar_al_pedido') {
       actions.push(createChatAction(ChatActionType.ADD_TO_CART, 'Agregar al carrito'));
     }
     
-    if (primaryIntent.includes('finalizar_pedido') || primaryIntent.includes('confirmar')) {
+    if (primaryIntent === 'modificar_pedido') {
+      actions.push(createChatAction(ChatActionType.MODIFY_ORDER, 'Modificar pedido'));
+    }
+
+    if (primaryIntent === 'cancelar_pedido') {
+      actions.push(createChatAction(ChatActionType.CANCEL_ORDER, 'Cancelar pedido'));
+    }
+
+    if (primaryIntent === 'confirmar_pedido') {
       actions.push(createChatAction(ChatActionType.PLACE_ORDER, 'Realizar pedido'));
     }
-
-    // Procesar lista de intents adicionales
-    for (const intent of intentList) {
-      const type = intent.type?.toLowerCase() || intent.toLowerCase();
-
-      if (type.includes('consultar_menu') || type.includes('menu') && (type.includes('ver') || type.includes('mostrar'))) {
-        if (!actions.some(a => a.type === ChatActionType.VIEW_MENU)) {
-          actions.push(createChatAction(ChatActionType.VIEW_MENU, 'Ver menú'));
-        }
-      } else if (type.includes('recomendar') || type.includes('suger')) {
-        if (!actions.some(a => a.type === ChatActionType.REQUEST_RECOMMENDATION)) {
-          actions.push(createChatAction(ChatActionType.REQUEST_RECOMMENDATION, 'Obtener recomendaciones'));
-        }
-      } else if (type.includes('agregar_al_pedido') || type.includes('order') || type.includes('add') || type.includes('quiero')) {
-        if (!actions.some(a => a.type === ChatActionType.ADD_TO_CART)) {
-          actions.push(createChatAction(ChatActionType.ADD_TO_CART, 'Agregar al carrito'));
-        }
-      } else if (type.includes('cart') || type.includes('carrito')) {
-        if (!actions.some(a => a.type === ChatActionType.VIEW_CART)) {
-          actions.push(createChatAction(ChatActionType.VIEW_CART, 'Ver carrito'));
-        }
-      } else if (type.includes('finalizar_pedido') || type.includes('place') || type.includes('confirm') || type.includes('finaliz')) {
-        if (!actions.some(a => a.type === ChatActionType.PLACE_ORDER)) {
-          actions.push(createChatAction(ChatActionType.PLACE_ORDER, 'Realizar pedido'));
-        }
-      }
-    }
+    
+    // OTRAS: intención "otro" no genera acciones específicas (respuesta conversacional)
 
     // NO agregar acción por defecto - permitir flujo conversacional
     logger.debug('Actions generated', { actions: actions.map(a => a.type) });
