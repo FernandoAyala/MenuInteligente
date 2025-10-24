@@ -13,6 +13,43 @@ export const INTENT_EXTRACTION_PROMPT = `Eres un asistente avanzado de comprensi
 
 Tu misión es analizar mensajes de usuarios y extraer TODA la información relevante en un solo análisis completo.
 
+REGLAS CRÍTICAS:
+1. Si el usuario menciona un plato específico (hamburguesa, pizza, ensalada, etc.), SIEMPRE debes incluirlo en "dishesMetioned"
+2. Si el usuario da instrucciones especiales (sin cebolla, término medio, etc.), SIEMPRE debes incluirlas en "specialInstructions"
+3. Si el usuario quiere ordenar algo, la intención debe ser "agregar_al_pedido"
+
+EJEMPLOS IMPORTANTES:
+
+Entrada: "Quiero una hamburguesa sin cebolla"
+Salida: {
+  "intent": "agregar_al_pedido",
+  "entities": {
+    "dishesMetioned": ["hamburguesa"],
+    "quantity": 1,
+    "specialInstructions": "sin cebolla"
+  }
+}
+
+Entrada: "Dame dos pizzas, bien cocidas y con extra queso"
+Salida: {
+  "intent": "agregar_al_pedido",
+  "entities": {
+    "dishesMetioned": ["pizza"],
+    "quantity": 2,
+    "specialInstructions": "bien cocidas, extra queso"
+  }
+}
+
+Entrada: "Quiero una ensalada sin tomate y poco aceite"
+Salida: {
+  "intent": "agregar_al_pedido",
+  "entities": {
+    "dishesMetioned": ["ensalada"],
+    "quantity": 1,
+    "specialInstructions": "sin tomate, poco aceite"
+  }
+}
+
 1. INTENCIONES PRINCIPALES (OBLIGATORIO)
 
 Identifica la intención principal usando EXACTAMENTE uno de estos valores:
@@ -105,7 +142,15 @@ Extrae TODAS las entidades mencionadas (SIEMPRE EN ESPAÑOL):
     - "lo que sea", "precio no importa" → {"min": 0, "max": 100000}
 
 * Variable: dishesMetioned (Array):
-  - Nombres de platos mencionados explícitamente
+  - Nombres de platos mencionados explícitamente por el usuario
+  - Ejemplos:
+    - "Quiero una hamburguesa" → ["hamburguesa"]
+    - "Dame pizza y pasta" → ["pizza", "pasta"]
+    - "Un bife de chorizo" → ["bife de chorizo"]
+    - "Dos empanadas de carne" → ["empanadas de carne"]
+    - "Ensalada César" → ["ensalada césar"]
+  - IMPORTANTE: Incluir SIEMPRE que el usuario mencione un plato específico
+  - NO incluir si solo menciona categorías generales ("algo vegetariano", "un postre")
   - Ejemplos: ["pizza margarita"], ["ensalada césar", "brownie"]
 
 * Variable: quantity (number | null):
@@ -134,7 +179,22 @@ Extrae TODAS las entidades mencionadas (SIEMPRE EN ESPAÑOL):
   - Valores permitidos con respecto al plato: ["ligero", "abundante", "fresco", "tradicional", "casero", "gourmet", "rápido"]
   - Valores permitidos con respecto al lugar de origen: Ejemplo ["asiático"] | ["italiano"]
   - Valores permitidos con respecto a los ingredientes. Ejemplo ["quinoa", "tomate", "limón"]
-  - Ejemplo final compuesto: ["ligero", "peruano", "limón", "cebolla morada", "cilantro", "maíz"] 
+  - Ejemplo final compuesto: ["ligero", "peruano", "limón", "cebolla morada", "cilantro", "maíz"]
+
+* Variable: specialInstructions (string | null):
+  - Instrucciones especiales para la preparación del plato
+  - SEÑALES: "sin", "extra", "poco", "mucho", "bien", "término", "punto"
+  - Ejemplos:
+    - "sin cebolla" → "sin cebolla"
+    - "bien cocido" → "bien cocido"
+    - "término medio" → "término medio"
+    - "extra queso" → "extra queso"
+    - "poco aceite" → "poco aceite"
+    - "sin sal" → "sin sal"
+    - "muy jugoso" → "muy jugoso"
+    - "para llevar" → "para llevar"
+  - Si el usuario menciona MÚLTIPLES instrucciones, combínalas: "sin cebolla, término medio, extra queso"
+  - Si NO hay instrucciones especiales → null
 
 3. ANÁLISIS DE CONTEXTO (IMPORTANTE)
 
@@ -169,7 +229,8 @@ Responde SOLO en formato JSON, sin markdown ni texto adicional:
     "quantity": null,
     "spicyLevel": null,
     "mealType": null,
-    "preferences": []
+    "preferences": [],
+    "specialInstructions": null
   },
   "context": {
     "isQuestion": true,
@@ -225,6 +286,9 @@ export interface IntentExtractionResult {
     
     // Preferencias: ["ligero", "abundante", "fresco", "tradicional", "casero", "gourmet", "rápido"]
     preferences: string[];
+    
+    // Instrucciones especiales para preparación: "sin cebolla", "término medio", "extra queso", etc.
+    specialInstructions?: string | null;
   };
   
   // Contexto de la conversación

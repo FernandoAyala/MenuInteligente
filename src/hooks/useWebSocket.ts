@@ -18,7 +18,7 @@ export interface ChatMessageEvent {
 }
 
 /**
- * Evento de respuesta del bot
+ * Evento de respuesta del agente IA
  */
 export interface BotResponseEvent {
   sessionId: string;
@@ -348,7 +348,8 @@ export const useShoppingCart = () => {
     }
   }, [cartItems]);
 
-  const addToCart = useCallback((item: any, quantity: number = 1) => {
+  const addToCart = useCallback(async (item: any, quantity: number = 1) => {
+    // 1. Actualizar estado local inmediatamente
     setCartItems(prev => {
       const existingIndex = prev.findIndex(cartItem => cartItem.menuItem.id === item.id);
       
@@ -364,6 +365,58 @@ export const useShoppingCart = () => {
         return [...prev, { menuItem: item, quantity, notes: '' }];
       }
     });
+
+    // 2. Sincronizar con el backend si hay sessionId
+    const urlSessionId = new URLSearchParams(window.location.search).get('sessionId');
+    if (urlSessionId) {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        
+        // Obtener el carrito actual de la sesión
+        const sessionResponse = await fetch(`${API_URL}/api/sessions/${urlSessionId}`);
+        if (sessionResponse.ok) {
+          const sessionData = await sessionResponse.json();
+          const currentCart = sessionData.cart || [];
+          
+          // Actualizar el carrito
+          const existingItemIndex = currentCart.findIndex((cartItem: any) => cartItem.menuItemId === item.id);
+          
+          let updatedCart;
+          if (existingItemIndex > -1) {
+            // Incrementar cantidad
+            updatedCart = currentCart.map((cartItem: any, index: number) =>
+              index === existingItemIndex
+                ? { ...cartItem, quantity: cartItem.quantity + quantity }
+                : cartItem
+            );
+          } else {
+            // Agregar nuevo item
+            updatedCart = [
+              ...currentCart,
+              {
+                menuItemId: item.id,
+                quantity: quantity,
+                specialInstructions: ''
+              }
+            ];
+          }
+          
+          // Guardar el carrito actualizado
+          const updateResponse = await fetch(`${API_URL}/api/sessions/${urlSessionId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cart: updatedCart })
+          });
+          
+          if (updateResponse.ok) {
+            console.log('✅ Carrito sincronizado con el backend');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Error sincronizando carrito con backend:', error);
+        // No lanzar error, el usuario ya ve el item en su carrito local
+      }
+    }
   }, []);
 
   const removeFromCart = useCallback((itemId: string) => {

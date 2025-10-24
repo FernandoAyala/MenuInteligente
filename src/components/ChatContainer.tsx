@@ -31,8 +31,28 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
     sessionId: urlSessionId || undefined, // Usar sessionId de la URL si existe
     enableWebSocket: false, // WebSocket no implementado en backend aún
     onBotMessage: (message) => {
-      console.log('📨 Nuevo mensaje del bot:', message);
+      console.log('📨 Nuevo mensaje del agente IA:', message);
       setIsTyping(false);
+      
+      // Detectar si el mensaje indica que se agregó algo al carrito
+      const contentLower = message.content.toLowerCase();
+      const addedToCartPhrases = [
+        'he agregado',
+        'agregué',
+        'añadí',
+        'he añadido',
+        'agregado al carrito',
+        'añadido al carrito',
+        'agregado a tu carrito',
+        'añadido a tu carrito',
+      ];
+      
+      const cartWasUpdated = addedToCartPhrases.some(phrase => contentLower.includes(phrase));
+      
+      if (cartWasUpdated) {
+        console.log('🛒 Carrito actualizado por el agente, recargando CartPanel...');
+        setCartUpdateTrigger(prev => prev + 1);
+      }
     },
     onError: (error) => {
       console.error('❌ Error en chat:', error);
@@ -52,6 +72,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [autoVoiceEnabled, setAutoVoiceEnabled] = useState<boolean>(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [cartUpdateTrigger, setCartUpdateTrigger] = useState(0); // Trigger para recargar el carrito
   const lastAutoSpokenMessageId = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -111,7 +132,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
           specialInstructions: item.specialInstructions || '',
         }));
         
-        // Enviar el mensaje al chat para que el bot confirme
+        // Enviar el mensaje al chat para que el agente IA confirme
         setIsTyping(true);
         await sendChatMessage(content);
         
@@ -122,7 +143,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         
         return;
       } else {
-        // Si no hay items, enviar al bot para que responda
+        // Si no hay items, enviar al agente IA para que responda
         setIsTyping(true);
         await sendChatMessage(content);
         return;
@@ -149,6 +170,9 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
 
   const handleAddToCart = (item: MenuItem) => {
     addToCart(item, 1);
+    
+    // Incrementar trigger para que CartPanel recargue
+    setCartUpdateTrigger(prev => prev + 1);
     
     // Mensaje automático de confirmación
     const message = `He agregado "${item.name}" al pedido. ¡Genial elección!`;
@@ -343,7 +367,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       // Crear mensaje de confirmación para el chat
       const confirmationMessage = `✅ ¡Pedido confirmado exitosamente!\n\n🍽️ Mesa: ${randomTable}\n📋 Orden: #${createdOrder.id}\n💰 Total: $${createdOrder.totalAmount.toLocaleString()}\n\n👨‍🍳 Tu pedido ha sido enviado a la cocina y estará listo pronto. ¡Buen provecho!`;
       
-      // Agregar el mensaje al chat (simulando respuesta del bot)
+      // Agregar el mensaje al chat (simulando respuesta del agente IA)
       // Nota: Idealmente esto debería venir del backend, pero lo agregamos aquí para feedback inmediato
       console.log('📣 Confirmación:', confirmationMessage);
 
@@ -473,6 +497,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         onConfirmOrder={handleConfirmOrder}
+        updateTrigger={cartUpdateTrigger}
       />
     </div>
   );

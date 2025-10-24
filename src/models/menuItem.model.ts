@@ -30,6 +30,7 @@ export interface MenuItem {
   price: number;
   currency: string;
   category: MenuCategory;
+  imageUrl?: string;
   spicyLevel?: SpicyLevel;
   isVegan: boolean;
   isVegetarian: boolean;

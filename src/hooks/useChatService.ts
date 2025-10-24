@@ -4,9 +4,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { chatService, ChatResponse, SendMessageRequest } from '../services/api';
+import { ChatResponse, chatService, SendMessageRequest } from '../services/api';
 import { ChatMessage } from '../types';
-import { useWebSocket, BotResponseEvent } from './useWebSocket';
+import { BotResponseEvent, useWebSocket } from './useWebSocket';
 
 /**
  * Opciones de configuración del chat
@@ -16,7 +16,7 @@ export interface UseChatServiceOptions {
   sessionId?: string;
   /** Habilitar WebSocket para tiempo real */
   enableWebSocket?: boolean;
-  /** Callback cuando se recibe un mensaje del bot */
+  /** Callback cuando se recibe un mensaje del agente IA */
   onBotMessage?: (message: ChatMessage) => void;
   /** Callback cuando ocurre un error */
   onError?: (error: Error) => void;
@@ -44,7 +44,7 @@ export interface ChatState {
  *   connectionStatus 
  * } = useChatService({
  *   enableWebSocket: true,
- *   onBotMessage: (msg) => console.log('Bot:', msg.content),
+ *   onBotMessage: (msg) => console.log('Agente IA:', msg.content),
  * });
  * 
  * // Enviar mensaje
@@ -115,7 +115,7 @@ export function useChatService(options: UseChatServiceOptions = {}) {
   }, []);
 
   /**
-   * Convertir respuesta del bot a ChatMessage
+   * Convertir respuesta del agente IA a ChatMessage
    */
   const botResponseToMessage = useCallback((response: ChatResponse | BotResponseEvent): ChatMessage => {
     // ChatResponse del backend tiene 'response', BotResponseEvent tiene 'message'
@@ -210,7 +210,7 @@ export function useChatService(options: UseChatServiceOptions = {}) {
         // Actualizar mensaje del usuario
         updateMessage(userMessage.id, { status: 'delivered' });
 
-        // Agregar respuesta del bot
+        // Agregar respuesta del agente IA
         const botMessage = botResponseToMessage(response);
         addMessage(botMessage);
         onBotMessage?.(botMessage);
