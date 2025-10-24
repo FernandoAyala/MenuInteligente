@@ -30,13 +30,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     console.log(`✅ Menu item encontrado: ${menuItem.name}`);
     
-    res.json({
+    return res.json({
       success: true,
       data: menuItem,
     });
   } catch (error) {
     console.error('❌ Error getting menu item:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error',
     });
@@ -47,18 +47,18 @@ router.get('/:id', async (req: Request, res: Response) => {
  * GET /api/menu-items
  * Obtener todos los items del menú disponibles
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   try {
     const menuItems = await menuItemRepo.findAllAvailable();
     
-    res.json({
+    return res.json({
       success: true,
       data: menuItems,
       count: menuItems.length,
     });
   } catch (error) {
     console.error('Error getting menu items:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error',
     });

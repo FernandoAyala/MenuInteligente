@@ -54,6 +54,7 @@
     "src/types",
     "src/mocks",
     "src/examples",
-    "src/services/api"
+    "src/services/api",
+    "src/scripts/create-test-menu-items.ts"
   ]
 }

@@ -9,6 +9,16 @@ import '@testing-library/jest-dom';
 import { RecommendationsPanel } from '../RecommendationsPanel';
 import * as useRecommendationsHook from '../../hooks/useRecommendations';
 
+// Mock servicios que usan import.meta
+jest.mock('../../services/api/client', () => ({
+  apiClient: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    delete: jest.fn()
+  }
+}));
+
 // Mock del hook useRecommendations
 jest.mock('../../hooks/useRecommendations');
 

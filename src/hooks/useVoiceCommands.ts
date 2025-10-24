@@ -44,7 +44,7 @@ export const useVoiceCommands = (): VoiceCommandsHook => {
       category: 'ordering'
     },
     {
-      trigger: ['vaciar carrito', 'limpiar carrito', 'borrar todo', 'empezar de nuevo'],
+      trigger: ['vaciar carrito', 'limpiar carrito', 'borrar todo', 'comenzar de nuevo', 'empezar de nuevo'],
       action: 'CLEAR_CART',
       description: 'Vacía completamente el carrito de compras',
       category: 'ordering'
@@ -108,7 +108,7 @@ export const useVoiceCommands = (): VoiceCommandsHook => {
       category: 'control'
     },
     {
-      trigger: ['empezar de nuevo', 'reiniciar', 'nueva conversación'],
+      trigger: ['reiniciar conversación', 'reiniciar', 'nueva conversación'],
       action: 'RESTART_CHAT',
       description: 'Reinicia la conversación desde el inicio',
       category: 'control'
@@ -123,10 +123,15 @@ export const useVoiceCommands = (): VoiceCommandsHook => {
   } => {
     const normalizedTranscript = transcript.toLowerCase().trim();
     
-    // Buscar coincidencias de comandos
+    // Buscar coincidencias exactas de comandos
     for (const command of voiceCommands) {
       for (const trigger of command.trigger) {
-        if (normalizedTranscript.includes(trigger.toLowerCase())) {
+        const triggerLower = trigger.toLowerCase();
+        // Verificar coincidencia exacta o como palabras completas
+        const isExactMatch = normalizedTranscript === triggerLower;
+        const isWordMatch = new RegExp(`\\b${triggerLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(normalizedTranscript);
+        
+        if (isExactMatch || isWordMatch) {
           return {
             isCommand: true,
             action: command.action,
@@ -146,19 +151,24 @@ export const useVoiceCommands = (): VoiceCommandsHook => {
   }, []);
 
   const detectIntent = (transcript: string) => {
-    const text = transcript.toLowerCase();
+    const text = transcript.toLowerCase().trim();
     
-    // Patrones de pedido directo
+    // Solo procesar si el texto tiene una longitud razonable para un comando
+    if (text.length < 3 || text.length > 100) {
+      return { isCommand: false };
+    }
+    
+    // Patrones de pedido directo - más específicos
     const orderPatterns = [
-      /quiero (una?|un) (.+)/i,
-      /me gustaría (una?|un) (.+)/i,
-      /pido (una?|un) (.+)/i,
-      /dame (una?|un) (.+)/i
+      /^quiero (una?|un) (.+)$/i,
+      /^me gustaría (una?|un) (.+)$/i,
+      /^pido (una?|un) (.+)$/i,
+      /^dame (una?|un) (.+)$/i
     ];
     
     for (const pattern of orderPatterns) {
       const match = text.match(pattern);
-      if (match && match[2]) {
+      if (match && match[2] && match[2].length > 2) {
         return {
           isCommand: true,
           action: 'DIRECT_ORDER',
@@ -168,15 +178,15 @@ export const useVoiceCommands = (): VoiceCommandsHook => {
       }
     }
     
-    // Patrones de cantidad
+    // Patrones de cantidad - más específicos
     const quantityPatterns = [
-      /(\d+) (de |x )?(.+)/i,
-      /(dos|tres|cuatro|cinco) (.+)/i
+      /^(\d+) (de |x )?(.+)$/i,
+      /^(dos|tres|cuatro|cinco) (.+)$/i
     ];
     
     for (const pattern of quantityPatterns) {
       const match = text.match(pattern);
-      if (match) {
+      if (match && (match[3] || match[2]) && (match[3] || match[2]).length > 2) {
         const quantity = match[1] === 'dos' ? '2' : 
                         match[1] === 'tres' ? '3' :
                         match[1] === 'cuatro' ? '4' :

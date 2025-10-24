@@ -40,6 +40,14 @@ module.exports = {
       transform: {
         '^.+\\.ts$': 'ts-jest',
       },
+      globals: {
+        'ts-jest': {
+          useESM: false,
+        }
+      },
+      moduleNameMapper: {
+        '^(\\.{1,2}/.*)\\.js$': '$1',
+      }
     },
     {
       displayName: 'components',
@@ -51,8 +59,18 @@ module.exports = {
       transform: {
         '^.+\\.tsx?$': 'ts-jest',
       },
+      globals: {
+        'ts-jest': {
+          useESM: false,
+        }
+      },
       moduleNameMapper: {
         '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+        '^(\\.{1,2}/.*)\\.js$': '$1',
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '^../services/api/ordersService$': '<rootDir>/src/mocks/ordersServiceMock.js',
+        '^../services/api/client$': '<rootDir>/src/mocks/clientMock.js',
+        '^../../services/api/(.*)$': '<rootDir>/src/mocks/$1Mock.js',
       },
     },
   ],

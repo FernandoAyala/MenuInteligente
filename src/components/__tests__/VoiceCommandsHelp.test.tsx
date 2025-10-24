@@ -22,32 +22,28 @@ describe('VoiceCommandsHelp', () => {
 
   const mockCommands = [
     {
-      patterns: ['mostrar menú', 'ver menú'],
+      trigger: ['mostrar menú', 'ver menú', 'quiero ver el menú'],
       action: 'SHOW_MENU',
       category: 'navigation',
       description: 'Muestra el menú completo',
-      examples: ['mostrar menú', 'quiero ver el menú'],
     },
     {
-      patterns: ['agregar pizza', 'quiero una pizza'],
+      trigger: ['agregar pizza', 'quiero una pizza'],
       action: 'ADD_TO_CART',
       category: 'ordering',
       description: 'Agregar un plato al carrito',
-      examples: ['agregar pizza', 'quiero una pizza margarita'],
     },
     {
-      patterns: ['qué hay de postre', 'postres disponibles'],
+      trigger: ['qué hay de postre', 'postres disponibles'],
       action: 'SHOW_DESSERTS',
       category: 'inquiry',
       description: 'Consultar postres disponibles',
-      examples: ['qué hay de postre', 'tienen helado'],
     },
     {
-      patterns: ['cancelar', 'salir'],
+      trigger: ['cancelar', 'salir'],
       action: 'CANCEL',
       category: 'control',
       description: 'Cancelar operación actual',
-      examples: ['cancelar', 'salir'],
     },
   ];
 
@@ -136,7 +132,7 @@ describe('VoiceCommandsHelp', () => {
     });
 
     it('debe mostrar comandos de control', () => {
-      expect(screen.getByText(/cancelar/i)).toBeInTheDocument();
+      expect(screen.getByText(/cancelar/i, { selector: 'code' })).toBeInTheDocument();
     });
   });
 
@@ -180,8 +176,9 @@ describe('VoiceCommandsHelp', () => {
       fireEvent.click(closeButton);
       expect(screen.queryByText(/comandos de voz/i)).not.toBeInTheDocument();
 
-      // Abrir de nuevo
-      fireEvent.click(button);
+      // Abrir de nuevo - obtener el botón nuevamente
+      const buttonAgain = screen.getByRole('button', { name: /ayuda de comandos/i });
+      fireEvent.click(buttonAgain);
       expect(screen.getByText(/comandos de voz/i)).toBeInTheDocument();
     });
   });
@@ -239,8 +236,8 @@ describe('VoiceCommandsHelp', () => {
       fireEvent.click(screen.getByRole('button', { name: /ayuda de comandos/i }));
 
       const command = mockCommands[0];
-      command.examples.forEach(example => {
-        expect(screen.getByText(new RegExp(example, 'i'))).toBeInTheDocument();
+      command.trigger.forEach((trigger: string) => {
+        expect(screen.getByText(new RegExp(trigger, 'i'))).toBeInTheDocument();
       });
     });
   });

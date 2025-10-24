@@ -25,6 +25,11 @@ export const useTextToSpeech = (): TextToSpeechHook => {
 
   // Cargar voces disponibles
   const loadVoices = useCallback(() => {
+    if (typeof speechSynthesis === 'undefined') {
+      console.warn('speechSynthesis no está disponible');
+      return;
+    }
+    
     const availableVoices = speechSynthesis.getVoices();
     console.log('🎤 Voces disponibles:', availableVoices.length);
     setVoices(availableVoices);
@@ -43,13 +48,13 @@ export const useTextToSpeech = (): TextToSpeechHook => {
   useEffect(() => {
     console.log('🎤 Inicializando Text-to-Speech...');
     loadVoices();
-    if (speechSynthesis.onvoiceschanged !== undefined) {
+    if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
       speechSynthesis.onvoiceschanged = loadVoices;
     }
 
     // Cleanup
     return () => {
-      if (speechSynthesis.onvoiceschanged) {
+      if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged) {
         speechSynthesis.onvoiceschanged = null;
       }
     };
@@ -66,7 +71,9 @@ export const useTextToSpeech = (): TextToSpeechHook => {
     }
 
     // Detener cualquier síntesis en curso
-    speechSynthesis.cancel();
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.cancel();
+    }
 
     const utterance = new SpeechSynthesisUtterance(text);
     
@@ -100,20 +107,24 @@ export const useTextToSpeech = (): TextToSpeechHook => {
 
     // Iniciar síntesis
     console.log('🚀 Llamando speechSynthesis.speak()...');
-    speechSynthesis.speak(utterance);
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.speak(utterance);
+    }
     
     // Verificar inmediatamente si está hablando
     setTimeout(() => {
       console.log('📊 Estado después de 100ms:', {
-        speaking: speechSynthesis.speaking,
-        pending: speechSynthesis.pending,
-        paused: speechSynthesis.paused
+        speaking: typeof speechSynthesis !== 'undefined' ? speechSynthesis.speaking : false,
+        pending: typeof speechSynthesis !== 'undefined' ? speechSynthesis.pending : false,
+        paused: typeof speechSynthesis !== 'undefined' ? speechSynthesis.paused : false
       });
     }, 100);
   }, [selectedVoice, rate, pitch, volume]);
 
   const stop = useCallback(() => {
-    speechSynthesis.cancel();
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.cancel();
+    }
     setIsSpeaking(false);
   }, []);
 

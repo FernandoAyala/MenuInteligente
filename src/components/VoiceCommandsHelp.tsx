@@ -25,6 +25,7 @@ export const VoiceCommandsHelp: React.FC<VoiceCommandsHelpProps> = ({ className 
         onClick={() => setIsOpen(true)}
         className={`p-2 text-text-secondary hover:text-text-primary transition-colors ${className}`}
         title="Ayuda de comandos de voz"
+        aria-label="Ayuda de comandos"
       >
         <HelpCircle className="w-5 h-5" />
       </button>
@@ -39,6 +40,8 @@ export const VoiceCommandsHelp: React.FC<VoiceCommandsHelpProps> = ({ className 
           <button
             onClick={() => setIsOpen(false)}
             className="p-1 hover:bg-gray-100 rounded-full"
+            aria-label="Cerrar"
+            title="Cerrar ayuda"
           >
             <X className="w-5 h-5" />
           </button>
@@ -67,14 +70,11 @@ export const VoiceCommandsHelp: React.FC<VoiceCommandsHelpProps> = ({ className 
                   {categoryCommands.map((command, index) => (
                     <div key={index} className="border border-gray-200 rounded-lg p-3 hover:bg-gray-50">
                       <div className="flex flex-wrap gap-1 mb-1">
-                        {command.trigger.slice(0, 2).map((trigger, i) => (
+                        {command.trigger.map((trigger, i) => (
                           <code key={i} className="text-xs bg-gray-100 px-2 py-1 rounded">
                             "{trigger}"
                           </code>
                         ))}
-                        {command.trigger.length > 2 && (
-                          <span className="text-xs text-gray-500">+{command.trigger.length - 2} más</span>
-                        )}
                       </div>
                       <p className="text-sm text-gray-600">{command.description}</p>
                     </div>

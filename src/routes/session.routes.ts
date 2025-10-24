@@ -25,13 +25,13 @@ router.get('/:sessionId', async (req: Request, res: Response) => {
       });
     }
 
-    res.json({
+    return res.json({
       success: true,
       data: session,
     });
   } catch (error) {
     console.error('Error getting session:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       error: 'Internal server error',
     });

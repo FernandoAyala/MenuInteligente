@@ -5,6 +5,26 @@
 
 import { initializeFirebase } from '../config/firebase.config';
 import { MenuCategory, SpicyLevel, type CreateMenuItemDto } from '../models/menuItem.model';
+import { menuItemService } from '../services/menuItem.service';
+
+/**
+ * Helper para crear un MenuItem con valores por defecto para propiedades dietéticas
+ */
+function createMenuItem(item: Partial<CreateMenuItemDto> & Pick<CreateMenuItemDto, 'name' | 'description' | 'price' | 'currency' | 'category' | 'available'>): CreateMenuItemDto {
+    return {
+        isLactoseFree: false,
+        isKosher: false,
+        isHalal: false,
+        isPaleo: false,
+        isKeto: false,
+        isVegan: false,
+        isVegetarian: false,
+        isGlutenFree: false,
+        allergens: [],
+        spicyLevel: SpicyLevel.NONE,
+        ...item
+    };
+}
 
 async function createTestMenuItems() {
     console.log('🚀 Iniciando creación de items del menú de prueba...\n');
@@ -31,6 +51,11 @@ async function createTestMenuItems() {
                 isVegan: false,
                 isVegetarian: false,
                 isGlutenFree: false,
+                isLactoseFree: true,
+                isKosher: false,
+                isHalal: false,
+                isPaleo: false,
+                isKeto: false,
                 allergens: ['gluten', 'huevo'],
                 available: true,
             },
