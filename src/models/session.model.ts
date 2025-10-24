@@ -23,6 +23,9 @@ export interface CartItem {
   menuItemId: string;
   quantity: number;
   specialInstructions?: string;
+  confirmed?: boolean; // true = ya fue pedido (mostrar en gris), false/undefined = pendiente
+  orderId?: string; // ID del pedido al que pertenece (para historial)
+  confirmedAt?: Date; // Fecha cuando se confirmó
 }
 
 /**

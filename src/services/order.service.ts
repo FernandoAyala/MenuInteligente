@@ -1,26 +1,27 @@
 import {
-    CreateOrderDto,
-    DailyOrderStats,
-    Order,
-    OrderDish,
-    OrderStatus,
-    UpdateOrderStatusDto,
+  CreateOrderDto,
+  DailyOrderStats,
+  Order,
+  OrderDish,
+  OrderStatus,
+  UpdateOrderStatusDto,
 } from '../models/order.model';
 import { CartItem } from '../models/session.model';
 import { MenuItemRepository } from '../repositories/menuItem.repository';
 import orderRepository, { OrderRepository } from '../repositories/order.repository';
-import { getOrderSocketHandler } from '../sockets/order.socket';
-
-/**
+import { SessionRepository } from '../repositories/session.repository';
+import { getOrderSocketHandler } from '../sockets/order.socket'; /**
  * Servicio para gestionar comandas/pedidos
  */
 export class OrderService {
   private orderRepository: OrderRepository;
   private menuItemRepository: MenuItemRepository;
+  private sessionRepository: SessionRepository;
 
   constructor(repository: OrderRepository = orderRepository) {
     this.orderRepository = repository;
     this.menuItemRepository = new MenuItemRepository();
+    this.sessionRepository = new SessionRepository();
   }
 
   /**
@@ -85,6 +86,39 @@ export class OrderService {
     };
 
     const order = await this.orderRepository.create(createOrderDto);
+
+    // ✅ MARCAR ITEMS COMO CONFIRMADOS EN LA SESIÓN
+    try {
+      const session = await this.sessionRepository.findById(sessionId);
+      if (session) {
+        // Actualizar solo los items del carrito que se acaban de confirmar
+        const updatedCart = session.cart.map(cartItem => {
+          // Buscar si este item está en los cartItems que se confirmaron
+          const wasOrdered = cartItems.some(orderedItem => 
+            orderedItem.menuItemId === cartItem.menuItemId &&
+            cartItem.specialInstructions === orderedItem.specialInstructions
+          );
+          
+          if (wasOrdered && !cartItem.confirmed) {
+            // Marcar como confirmado
+            return {
+              ...cartItem,
+              confirmed: true,
+              orderId: order.id,
+              confirmedAt: new Date(),
+            };
+          }
+          
+          return cartItem;
+        });
+
+        await this.sessionRepository.update(sessionId, { cart: updatedCart });
+        console.log('✅ Items del carrito marcados como confirmados en Firestore');
+      }
+    } catch (error) {
+      console.error('⚠️ Error al marcar items como confirmados:', error);
+      // No lanzar error, la orden ya se creó exitosamente
+    }
 
     // Notificar a través de WebSocket
     try {

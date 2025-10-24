@@ -358,11 +358,19 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
 
       console.log('✅ Orden creada exitosamente:', createdOrder);
 
-      // Limpiar el carrito después de confirmar
-      clearCart();
+      // NO limpiar el carrito local - dejamos que el backend marque como confirmados
+      // clearCart(); // ❌ COMENTADO
 
-      // Cerrar el modal del carrito
+      // INCREMENTAR EL TRIGGER para que CartPanel recargue desde Firestore
+      setCartUpdateTrigger(prev => prev + 1);
+
+      // Cerrar el modal del carrito temporalmente
       setIsCartOpen(false);
+      
+      // Reabrir después de 500ms para mostrar items confirmados en gris
+      setTimeout(() => {
+        setIsCartOpen(true);
+      }, 500);
 
       // Crear mensaje de confirmación para el chat
       const confirmationMessage = `✅ ¡Pedido confirmado exitosamente!\n\n🍽️ Mesa: ${randomTable}\n📋 Orden: #${createdOrder.id}\n💰 Total: $${createdOrder.totalAmount.toLocaleString()}\n\n👨‍🍳 Tu pedido ha sido enviado a la cocina y estará listo pronto. ¡Buen provecho!`;

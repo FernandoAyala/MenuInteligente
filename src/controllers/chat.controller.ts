@@ -352,14 +352,90 @@ export class ChatController {
         }
       }
 
+      // 4.5 PROCESAR PLACE_ORDER - Confirmar pedido y vaciar carrito
+      const hasPlaceOrder = actions.some(a => a.type === ChatActionType.PLACE_ORDER);
+      let orderId: string | undefined = undefined;
+
+      if (hasPlaceOrder) {
+        try {
+          logger.info('Processing PLACE_ORDER action', { sessionId: session.id });
+
+          // Obtener carrito actual
+          const currentSession = await this.sessionRepository.findById(session.id);
+          const currentCart = currentSession?.cart || [];
+
+          // Filtrar solo items NO confirmados (pendientes)
+          const pendingItems = currentCart.filter(item => !item.confirmed);
+
+          if (pendingItems.length === 0) {
+            logger.warn('Cannot place order: no pending items in cart', { sessionId: session.id });
+          } else {
+            // Crear el pedido SOLO con items pendientes
+            // TODO: Obtener tableNumber de alguna parte (por ahora usar 1 por defecto)
+            const tableNumber = 1; // Podría venir del sessionId o de un prompt previo
+            
+            const order = await this.orderService.createFromCart(
+              tableNumber,
+              session.id,
+              pendingItems,
+              intents.entities?.specialInstructions || undefined // Notas adicionales del cliente
+            );
+
+            orderId = order.id;
+
+            logger.info('Order created successfully', {
+              sessionId: session.id,
+              orderId: order.id,
+              itemCount: pendingItems.length,
+            });
+
+            // MARCAR items como confirmados (en lugar de vaciar)
+            const updatedCart = currentCart.map(item => {
+              // Si el item estaba pendiente, marcarlo como confirmado
+              if (!item.confirmed) {
+                return {
+                  ...item,
+                  confirmed: true,
+                  orderId: order.id,
+                  confirmedAt: new Date(),
+                };
+              }
+              // Si ya estaba confirmado, mantenerlo igual
+              return item;
+            });
+
+            await this.sessionRepository.update(session.id, {
+              cart: updatedCart,
+              updatedAt: new Date(),
+            });
+
+            logger.info('Cart items marked as confirmed', { 
+              sessionId: session.id,
+              confirmedCount: pendingItems.length,
+              totalInCart: updatedCart.length
+            });
+          }
+        } catch (orderError) {
+          logger.error('Failed to place order', {
+            sessionId: session.id,
+            error: orderError instanceof Error ? orderError.message : 'Unknown',
+          });
+        }
+      }
+
       // 5. Construir respuesta con contexto del mensaje y slots acumulados
-      const responseMessage = await this.buildResponseMessage(
+      let responseMessage = await this.buildResponseMessage(
         chatRequest.message, 
         intents, 
         actions, 
         recommendations,
         updatedSlots
       );
+
+      // Si se creó un pedido, modificar el mensaje para incluir el ID
+      if (orderId) {
+        responseMessage = `¡Pedido confirmado! 🎉\n\nTu pedido #${orderId.substring(0, 8)} ha sido enviado a la cocina.\nTe avisaremos cuando esté listo.\n\n¿Deseas ordenar algo más?`;
+      }
 
       const metadata: ChatResponseMetadata = {
         processingTime: Date.now() - startTime,

@@ -2,10 +2,11 @@
  * Rutas para gestión de items del menú
  */
 
+import type { Router as ExpressRouter } from 'express';
 import { Request, Response, Router } from 'express';
 import { MenuItemRepository } from '../repositories/menuItem.repository';
 
-const router = Router();
+const router: ExpressRouter = Router();
 const menuItemRepo = new MenuItemRepository();
 
 /**
