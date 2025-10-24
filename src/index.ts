@@ -10,16 +10,22 @@ import { initializeFirebase } from './config/firebase.config';
 const app: Application = express();
 const httpServer = createServer(app);
 
-// Configuración de Socket.io
+// Configuración de Socket.io con soporte para múltiples frontends
 const io = new Server(httpServer, {
   cors: {
-    origin: config.allowedOrigins,
-    methods: ['GET', 'POST'],
+    origin: config.allowedOrigins, // Incluye puertos 5173 y 5174
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    credentials: true,
   },
 });
 
-// Middleware
-app.use(cors({ origin: config.allowedOrigins }));
+// Middleware de CORS más permisivo para desarrollo
+app.use(cors({ 
+  origin: config.allowedOrigins, // Incluye puertos 5173 y 5174
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -129,3 +135,4 @@ httpServer.listen(PORT, () => {
 });
 
 export { app, io };
+

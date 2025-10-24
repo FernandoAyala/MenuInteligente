@@ -1,34 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { generateRandomCommand, mockCommands } from '../mocks/commandMocks';
+import React, { useState } from 'react';
+import { useOrders } from '../../hooks/useOrders';
+import { OrderStatus } from '../../services/api/ordersService';
 import { Command } from '../types/command.types';
 import CommandCard from './CommandCard';
 
 const CommandsBoard: React.FC = () => {
-  const [commands, setCommands] = useState<Command[]>(mockCommands);
+  const { orders: commands, loading, error, updateOrderStatus, refreshOrders, connected } = useOrders();
   const [filter, setFilter] = useState<'all' | Command['status']>('all');
   const [sortBy, setSortBy] = useState<'timestamp' | 'table' | 'status'>('timestamp');
 
-  // Simulación de actualización en tiempo real (cada 30 segundos)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Ocasionalmente agregar una nueva comanda
-      if (Math.random() < 0.3) {
-        const newCommand = generateRandomCommand();
-        setCommands(prev => [newCommand, ...prev]);
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleStatusChange = (commandId: string, newStatus: Command['status']) => {
-    setCommands(prevCommands =>
-      prevCommands.map(command =>
-        command.id === commandId
-          ? { ...command, status: newStatus }
-          : command
-      )
-    );
+  const handleStatusChange = async (commandId: string, newStatus: Command['status']) => {
+    try {
+      console.log(`� Board: Cambiando estado de ${commandId} a ${newStatus}`);
+      await updateOrderStatus(commandId, newStatus as OrderStatus);
+      console.log(`✅ Board: Estado actualizado exitosamente`);
+    } catch (err) {
+      console.error('❌ Board: Error al actualizar estado:', err);
+      // El hook ya maneja el refresh en caso de error
+    }
   };
 
   const filteredCommands = commands.filter(command => {
@@ -56,9 +45,8 @@ const CommandsBoard: React.FC = () => {
     return commands.filter(cmd => cmd.status === status).length;
   };
 
-  const addTestCommand = () => {
-    const newCommand = generateRandomCommand();
-    setCommands(prev => [newCommand, ...prev]);
+  const handleRefresh = () => {
+    refreshOrders();
   };
 
   return (
@@ -71,13 +59,31 @@ const CommandsBoard: React.FC = () => {
             <p className="text-gray-600">Gestión en tiempo real de pedidos</p>
           </div>
           
-          <button
-            onClick={addTestCommand}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-          >
-            + Agregar Comanda de Prueba
-          </button>
+          <div className="flex gap-3 items-center">
+            {/* Indicador de conexión WebSocket */}
+            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-lg shadow">
+              <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+              <span className="text-sm font-medium text-gray-700">
+                {connected ? 'Conectado' : 'Desconectado'}
+              </span>
+            </div>
+
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? '🔄 Cargando...' : '🔄 Actualizar'}
+            </button>
+          </div>
         </div>
+
+        {/* Mensaje de error */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+            <strong>Error:</strong> {error}
+          </div>
+        )}
 
         {/* Estadísticas */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

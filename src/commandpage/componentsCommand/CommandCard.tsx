@@ -7,6 +7,17 @@ interface CommandCardProps {
 }
 
 const CommandCard: React.FC<CommandCardProps> = ({ command, onStatusChange }) => {
+  // Log para debugging
+  console.log('CommandCard rendering:', {
+    id: command.id,
+    status: command.status,
+    dishes: command.dishes.map(d => ({ 
+      name: d.name, 
+      specifications: d.specifications 
+    })),
+    timestamp: command.timestamp,
+  });
+
   const getStatusColor = (status: Command['status']) => {
     switch (status) {
       case 'pending':
@@ -37,26 +48,49 @@ const CommandCard: React.FC<CommandCardProps> = ({ command, onStatusChange }) =>
     }
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('es-AR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+  const formatTime = (date: Date | string) => {
+    try {
+      const dateObj = typeof date === 'string' ? new Date(date) : date;
+      if (isNaN(dateObj.getTime())) {
+        return '--:--';
+      }
+      return dateObj.toLocaleTimeString('es-AR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    } catch (error) {
+      console.error('Error formateando tiempo:', error);
+      return '--:--';
+    }
   };
 
-  const getTimeDifference = (timestamp: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'Hace menos de 1 min';
-    if (diffMins === 1) return 'Hace 1 min';
-    return `Hace ${diffMins} mins`;
+  const getTimeDifference = (timestamp: Date | string) => {
+    try {
+      const dateObj = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+      if (isNaN(dateObj.getTime())) {
+        return 'Tiempo desconocido';
+      }
+      
+      const now = new Date();
+      const diffMs = now.getTime() - dateObj.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      if (diffMins < 1) return 'Hace menos de 1 min';
+      if (diffMins === 1) return 'Hace 1 min';
+      return `Hace ${diffMins} mins`;
+    } catch (error) {
+      console.error('Error calculando diferencia de tiempo:', error);
+      return 'Tiempo desconocido';
+    }
   };
 
   const handleStatusChange = (newStatus: Command['status']) => {
+    console.log(`🔘 Cambiando estado de ${command.id} de "${command.status}" a "${newStatus}"`);
     onStatusChange(command.id, newStatus);
   };
+
+  // Log de estado actual para debugging de botones
+  console.log(`🎯 Renderizando botones para ${command.id}, estado: "${command.status}" (tipo: ${typeof command.status})`);
 
   return (
     <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 p-6 mb-4 hover:shadow-xl transition-shadow duration-200">
@@ -160,6 +194,13 @@ const CommandCard: React.FC<CommandCardProps> = ({ command, onStatusChange }) =>
             >
               Servido
             </button>
+          )}
+          
+          {/* Mostrar mensaje si no hay botón (para debugging) */}
+          {command.status !== 'pending' && command.status !== 'in-progress' && command.status !== 'ready' && (
+            <div className="text-sm text-gray-500 italic">
+              Estado: {command.status} (no hay acción disponible)
+            </div>
           )}
         </div>
       </div>
