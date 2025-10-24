@@ -2,10 +2,11 @@
  * Rutas para gestión de sesiones
  */
 
+import type { Router as ExpressRouter } from 'express';
 import { Request, Response, Router } from 'express';
 import { SessionRepository } from '../repositories/session.repository';
 
-const router = Router();
+const router: ExpressRouter = Router();
 const sessionRepo = new SessionRepository();
 
 /**
