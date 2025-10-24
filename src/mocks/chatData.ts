@@ -126,7 +126,7 @@ export const mockMenuItems: MenuItem[] = [
 export const mockChatMessages: ChatMessage[] = [
   {
     id: 'msg-1',
-    content: '¡Hola! Soy tu asistente culinario. ¿En qué puedo ayudarte hoy?',
+    content: '¡Hola! Soy Muzzini. ¿En qué puedo ayudarte hoy?',
     type: 'bot',
     timestamp: new Date(Date.now() - 300000), // 5 minutos atrás
     status: 'read'
@@ -188,7 +188,7 @@ export const generateBotResponse = (userMessage: string): ChatMessage => {
   const responses = [
     {
       trigger: ['hola', 'hi', 'buenas'],
-      content: '¡Hola! Soy tu asistente culinario. ¿En qué puedo ayudarte hoy? Puedo recomendarte platos, ayudarte con alergias o restricciones dietéticas.',
+      content: '¡Hola! Soy Muzzini. ¿En qué puedo ayudarte hoy? Puedo recomendarte platos, ayudarte con alergias o restricciones dietéticas.',
       menuItems: []
     },
     {

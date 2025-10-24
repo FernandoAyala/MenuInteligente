@@ -4,6 +4,7 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { ChatMessage, MenuItem } from '../types';
 import FoodCarousel from './FoodCarousel';
 import { VoiceOutputButton } from './VoiceOutputButton';
+import muzziniAvatar from '../chefcito.jpg';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -83,8 +84,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     <div className={`flex items-start gap-3 px-4 py-2 ${isOwn ? 'flex-row-reverse' : ''}`}>
       {/* Avatar del bot */}
       {!isOwn && (
-        <div className="w-8 h-8 rounded-full bg-accent-green flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-sm font-medium">AI</span>
+        <div className="w-8 h-8 rounded-full overflow-hidden bg-accent-green flex items-center justify-center flex-shrink-0">
+          <img 
+            src={muzziniAvatar} 
+            alt="Muzzini" 
+            className="w-full h-full object-cover"
+          />
         </div>
       )}
 

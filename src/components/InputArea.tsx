@@ -1,4 +1,4 @@
-import { Paperclip, Send, Smile } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { KeyboardEvent, useState } from 'react';
 import { VoiceInputButton } from './VoiceInputButton';
 
@@ -39,15 +39,7 @@ const InputArea: React.FC<InputAreaProps> = ({
 
   return (
     <div className="bg-chat-panel border-t border-gray-700 px-4 py-3">
-      <div className="flex items-end gap-3">
-        {/* Botón de adjuntar (futuro) */}
-        <button 
-          className="flex-shrink-0 p-2 text-text-secondary hover:text-text-primary transition-colors"
-          disabled={disabled}
-        >
-          <Paperclip className="w-5 h-5" />
-        </button>
-
+      <div className="flex items-center gap-3">
         {/* Área de texto */}
         <div className="flex-1 relative">
           <textarea
@@ -67,14 +59,6 @@ const InputArea: React.FC<InputAreaProps> = ({
             </div>
           )}
         </div>
-
-        {/* Botón de emoji (futuro) */}
-        <button 
-          className="flex-shrink-0 p-2 text-text-secondary hover:text-text-primary transition-colors"
-          disabled={disabled}
-        >
-          <Smile className="w-5 h-5" />
-        </button>
 
         {/* Botón de entrada de voz */}
         <VoiceInputButton

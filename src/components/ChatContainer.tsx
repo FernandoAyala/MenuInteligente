@@ -4,6 +4,7 @@ import { useChatService } from '../hooks/useChatService';
 import { useShoppingCart } from '../hooks/useWebSocket';
 import { MenuItem } from '../types';
 import { CartPanel } from './CartPanel';
+import chefcitoAvatar from '../chefcito.jpg';
 import ConnectionStatusIndicator from './ConnectionStatusIndicator';
 import InputArea from './InputArea';
 import MessageBubble from './MessageBubble';
@@ -387,11 +388,15 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       {/* Header */}
       <div className="bg-chat-panel border-b border-gray-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-accent-green flex items-center justify-center">
-            <span className="text-white font-medium">AI</span>
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-accent-green flex items-center justify-center">
+            <img 
+              src={chefcitoAvatar} 
+              alt="Muzzini" 
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-text-primary">Asistente Culinario</h1>
+            <h1 className="text-lg font-semibold text-text-primary">Muzzini</h1>
             <div className="flex items-center gap-2">
               {getConnectionIcon()}
               <span className="text-sm text-text-secondary">
