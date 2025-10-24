@@ -50,6 +50,7 @@ export interface ConversationSession {
   slots: ConversationSlots;
   messages: Message[];
   cart: CartItem[];
+  tableNumber?: number; // Número de mesa asignado (se mantiene para toda la sesión)
 }
 
 /**

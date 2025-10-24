@@ -40,6 +40,26 @@ Salida: {
   }
 }
 
+Entrada: "Me interesa mucho la Hamburguesa Clásica. ¿Podrías darme más detalles?"
+Salida: {
+  "intent": "preguntar_ingredientes",
+  "entities": {
+    "dishesMetioned": ["Hamburguesa Clásica"],
+    "quantity": null,
+    "specialInstructions": null
+  }
+}
+
+Entrada: "Contame sobre el salmón"
+Salida: {
+  "intent": "preguntar_ingredientes",
+  "entities": {
+    "dishesMetioned": ["salmón"],
+    "quantity": null,
+    "specialInstructions": null
+  }
+}
+
 Entrada: "Quiero una ensalada sin tomate y poco aceite"
 Salida: {
   "intent": "agregar_al_pedido",
@@ -68,9 +88,11 @@ Identifica la intención principal usando EXACTAMENTE uno de estos valores:
 
 * ACCIONES DE PEDIDO:
   - "agregar_al_pedido": Quiere ordenar algo específico (ej: "Quiero una pizza", "Dame dos empanadas")
+  - "quitar_del_pedido": Quiere eliminar del carrito (ej: "Sacá la hamburguesa", "Quitá la pizza", "Eliminá el brownie")
   - "modificar_pedido": Cambiar orden existente (ej: "Cambiá la pizza por ensalada")
-  - "cancelar_pedido": Cancelar orden (ej: "Cancelá mi pedido")
+  - "cancelar_pedido": Cancelar orden completa (ej: "Cancelá mi pedido", "Borrá todo")
   - "confirmar_pedido": Confirma y procede (ej: "Sí, confirmo", "Adelante")
+  - "solicitar_cuenta": Pide la cuenta final (ej: "La cuenta por favor", "Quiero pagar", "Cuánto es todo?")
 
 * OTRAS:
   - "otro": Cualquier otra intención no clasificada

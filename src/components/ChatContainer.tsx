@@ -1,10 +1,10 @@
 import { Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import chefcitoAvatar from '../chefcito.jpg';
 import { useChatService } from '../hooks/useChatService';
 import { useShoppingCart } from '../hooks/useWebSocket';
 import { MenuItem } from '../types';
 import { CartPanel } from './CartPanel';
-import chefcitoAvatar from '../chefcito.jpg';
 import ConnectionStatusIndicator from './ConnectionStatusIndicator';
 import InputArea from './InputArea';
 import MessageBubble from './MessageBubble';
@@ -317,8 +317,19 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         return;
       }
 
-      // Generar número de mesa aleatorio entre 1 y 20
-      const randomTable = Math.floor(Math.random() * 20) + 1;
+      // Obtener la sesión actual para verificar si ya tiene número de mesa
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const sessionResponse = await fetch(`${API_URL}/api/sessions/${sessionId}`);
+      const sessionData = await sessionResponse.json();
+      const session = sessionData.data;
+
+      // Si la sesión ya tiene mesa asignada, usarla. Si no, generar una nueva
+      const tableNumber = session?.tableNumber || Math.floor(Math.random() * 20) + 1;
+      
+      console.log(session?.tableNumber 
+        ? `🍽️ Usando mesa existente: ${tableNumber}` 
+        : `🍽️ Asignando nueva mesa: ${tableNumber}`
+      );
 
       // Convertir items del carrito al formato esperado por el backend
       const formattedCartItems = cartItems.map(item => ({
@@ -331,7 +342,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
 
       // Crear la orden con el formato que espera el backend
       const orderData = {
-        tableNumber: randomTable,
+        tableNumber: tableNumber,
         sessionId: sessionId,
         cartItems: formattedCartItems,
         customerNotes: 'Pedido desde chat',
@@ -340,7 +351,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       console.log('📨 Enviando orden al backend:', orderData);
 
       // Enviar directamente al endpoint POST /api/orders
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
       const response = await fetch(`${API_URL}/api/orders`, {
         method: 'POST',
         headers: {
@@ -374,7 +384,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       }, 500);
 
       // Crear mensaje de confirmación para el chat
-      const confirmationMessage = `✅ ¡Pedido confirmado exitosamente!\n\n🍽️ Mesa: ${randomTable}\n📋 Orden: #${createdOrder.id}\n💰 Total: $${createdOrder.totalAmount.toLocaleString()}\n\n👨‍🍳 Tu pedido ha sido enviado a la cocina y estará listo pronto. ¡Buen provecho!`;
+      const confirmationMessage = `✅ ¡Pedido confirmado exitosamente!\n\n🍽️ Mesa: ${tableNumber}\n📋 Orden: #${createdOrder.id}\n💰 Total: $${createdOrder.totalAmount.toLocaleString()}\n\n👨‍🍳 Tu pedido ha sido enviado a la cocina y estará listo pronto. ¡Buen provecho!`;
       
       // Agregar el mensaje al chat (simulando respuesta del agente IA)
       // Nota: Idealmente esto debería venir del backend, pero lo agregamos aquí para feedback inmediato
@@ -382,13 +392,32 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
 
       // Mostrar también un alert para asegurar que el usuario lo vea
       setTimeout(() => {
-        alert(`✅ Pedido confirmado!\n\nMesa: ${randomTable}\nOrden: #${createdOrder.id}\nTotal: $${createdOrder.totalAmount.toLocaleString()}\n\nLa orden ha sido enviada a la cocina.`);
+        alert(`✅ Pedido confirmado!\n\nMesa: ${tableNumber}\nOrden: #${createdOrder.id}\nTotal: $${createdOrder.totalAmount.toLocaleString()}\n\nLa orden ha sido enviada a la cocina.`);
       }, 300);
 
     } catch (error) {
       console.error('❌ Error al confirmar pedido:', error);
       alert(`❌ Error al confirmar el pedido: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
+  };
+
+  const handleRemoveItem = (menuItemId: string, itemName: string) => {
+    // Enviar mensaje al chat para eliminar el item
+    const message = `Sacá ${itemName} del carrito`;
+    handleSendMessage(message);
+    
+    // Cerrar el carrito temporalmente y recargarlo
+    setIsCartOpen(false);
+    setTimeout(() => {
+      setCartUpdateTrigger(prev => prev + 1);
+      setIsCartOpen(true);
+    }, 500);
+  };
+
+  const handleRequestBill = () => {
+    // Solo abrir el panel del carrito - NO enviar mensaje al chat
+    setIsCartOpen(true);
+    // El panel mostrará el total y los items confirmados visualmente
   };
 
   return (
@@ -510,6 +539,8 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         onConfirmOrder={handleConfirmOrder}
+        onRemoveItem={handleRemoveItem}
+        onRequestBill={handleRequestBill}
         updateTrigger={cartUpdateTrigger}
       />
     </div>

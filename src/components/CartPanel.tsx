@@ -2,7 +2,7 @@
  * Panel lateral para mostrar el carrito de compras
  */
 
-import { ShoppingCart, X } from 'lucide-react';
+import { Receipt, ShoppingCart, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MenuItem } from '../types';
 
@@ -21,6 +21,8 @@ interface CartPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirmOrder?: (cartItems: CartItem[]) => void;
+  onRemoveItem?: (menuItemId: string, itemName: string) => void; // Nueva prop para eliminar
+  onRequestBill?: () => void; // Nueva prop para solicitar cuenta
   updateTrigger?: number; // Trigger para forzar recarga del carrito
 }
 
@@ -29,6 +31,8 @@ export const CartPanel: React.FC<CartPanelProps> = ({
   isOpen,
   onClose,
   onConfirmOrder,
+  onRemoveItem,
+  onRequestBill,
   updateTrigger = 0,
 }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -205,13 +209,25 @@ export const CartPanel: React.FC<CartPanelProps> = ({
                             Cantidad: {item.quantity}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-green-600">
-                            ${(item.menuItem?.price || 0) * item.quantity}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            ${item.menuItem?.price || 0} c/u
-                          </p>
+                        <div className="flex items-start gap-2">
+                          <div className="text-right">
+                            <p className="font-bold text-green-600">
+                              ${(item.menuItem?.price || 0) * item.quantity}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              ${item.menuItem?.price || 0} c/u
+                            </p>
+                          </div>
+                          {/* Botón eliminar */}
+                          {onRemoveItem && (
+                            <button
+                              onClick={() => onRemoveItem(item.menuItemId, item.menuItem?.name || 'item')}
+                              className="p-1.5 hover:bg-red-50 text-red-500 hover:text-red-700 rounded transition-colors"
+                              title="Eliminar del carrito"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -314,20 +330,44 @@ export const CartPanel: React.FC<CartPanelProps> = ({
 
             {/* Botón de confirmar solo si hay items pendientes */}
             {pendingItems.length > 0 && (
-              <button
-                onClick={() => onConfirmOrder && onConfirmOrder(pendingItems)}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-              >
-                <ShoppingCart className="w-5 h-5" />
-                Confirmar Pedido ({pendingItems.length} {pendingItems.length === 1 ? 'item' : 'items'})
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => onConfirmOrder && onConfirmOrder(pendingItems)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                  Confirmar Pedido ({pendingItems.length} {pendingItems.length === 1 ? 'item' : 'items'})
+                </button>
+                {/* Botón solicitar cuenta */}
+                {confirmedItems.length > 0 && onRequestBill && (
+                  <button
+                    onClick={onRequestBill}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Receipt className="w-5 h-5" />
+                    Solicitar Cuenta
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Mensaje si solo hay items confirmados */}
             {pendingItems.length === 0 && confirmedItems.length > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                <p className="text-green-800 font-medium">✅ Todos los items están confirmados</p>
-                <p className="text-green-600 text-sm mt-1">Agrega más productos para continuar</p>
+              <div className="space-y-2">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                  <p className="text-green-800 font-medium">✅ Todos los items están confirmados</p>
+                  <p className="text-green-600 text-sm mt-1">Agrega más productos para continuar</p>
+                </div>
+                {/* Botón solicitar cuenta cuando solo hay confirmados */}
+                {onRequestBill && (
+                  <button
+                    onClick={onRequestBill}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Receipt className="w-5 h-5" />
+                    Solicitar Cuenta
+                  </button>
+                )}
               </div>
             )}
 
