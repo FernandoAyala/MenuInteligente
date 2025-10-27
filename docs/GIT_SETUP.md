@@ -4,8 +4,6 @@
 
 El repositorio Git local ya está inicializado y configurado con:
 - ✅ Rama principal: `main`
-- ✅ Usuario: VAZQUEZ PETRACCA PABLO NICOLAS
-- ✅ Email: pvazsquezpetracca@alumno.unlam.edu.ar
 - ✅ Repositorio remoto: https://dev.azure.com/IAAplicada-Grupo8/MenuInteligente/_git/MenuInteligente
 - ✅ Primer commit creado con todos los archivos
 
