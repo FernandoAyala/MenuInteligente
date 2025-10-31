@@ -25,7 +25,7 @@ import { ConversationSlots, MessageRole } from '../models/session.model';
 import { MenuItemRepository } from '../repositories/menuItem.repository';
 import { SessionRepository } from '../repositories/session.repository';
 import { cacheService } from '../services/cache.service';
-import { EnhancedLLMService } from '../services/enhanced-llm.service';
+import { LLMService } from '../services/llm.service';
 import { metricsService, MetricType } from '../services/metrics.service';
 import { OrderService } from '../services/order.service';
 import { RecommendationService } from '../services/recommendation.service';
@@ -35,20 +35,18 @@ import { logger } from '../utils/logger';
  * Controller para el endpoint de chat
  */
 export class ChatController {
-  private llmService: EnhancedLLMService;
+  private llmService: LLMService;
   private recommendationService: RecommendationService;
   private sessionRepository: SessionRepository;
   private orderService: OrderService;
   private menuItemRepository: MenuItemRepository;
 
   constructor() {
-    this.llmService = new EnhancedLLMService();
+    this.llmService = new LLMService();
     this.sessionRepository = new SessionRepository();
     this.orderService = new OrderService();
     this.menuItemRepository = new MenuItemRepository();
     
-    // Desactivar semantic scoring para evitar rate limit de OpenAI
-    // (cada recomendación haría N llamadas al LLM, una por cada plato)
     this.recommendationService = new RecommendationService({
       maxRecommendations: 3,
       minRecommendations: 2,

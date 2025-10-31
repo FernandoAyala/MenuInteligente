@@ -76,9 +76,13 @@
 
 # Nomenclatura
 - Código en Ingles
-- Variables y funciones en camelCase
-- Clases en PascalCase
-- Constantes en Mayúsculas
+- Variables locales: Prefijo según tipo + nombre descriptivo en CamelCase
+- Constantes: Todo en mayúsculas con guion bajo
+- Procedimientos / Funciones: Verbo + sustantivo
+- Controles de formulario: Prefijo según tipo de control + nombre descriptivo	
+- Módulos: Sustantivo en PascalCase
+- Clases: PascalCase (primera letra en mayúscula)
+- Formularios: Prefijo frm + nombre
 - Comentarios y documentación en Español
 - Documentación en la carpeta './docs'
 
