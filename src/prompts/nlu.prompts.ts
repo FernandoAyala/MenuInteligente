@@ -108,25 +108,17 @@ Identifica la intención principal usando EXACTAMENTE uno de estos valores:
 Extrae TODAS las entidades mencionadas (SIEMPRE EN ESPAÑOL):
 
 * Variable: dietaryRestrictions (Array):
-  - Valores permitidos: ["vegetariano", "vegano", "sin-gluten", "sin-lactosa", "kosher", "halal", "paleo", "keto"]
+  - Valores permitidos: ["vegetariano", "vegano", "sin-gluten", "sin-lactosa"]
     - "vegetariano": no come carne ni pescado
     - "vegano": no consume productos animales
     - "sin-gluten": celíaco, no puede trigo/cebada/centeno
     - "sin-lactosa": intolerancia a lácteos
-    - "kosher": sigue las leyes alimentarias judías (no mezcla carne y lácteos, solo carne de animales permitidos sacrificados ritualmente)
-    - "halal": sigue las leyes alimentarias islámicas (carne permitida solo si es halal, sin cerdo ni alcohol)
-    - "paleo": dieta basada en alimentos preagrícolas (carne, pescado, frutas, verduras, frutos secos; evita cereales, lácteos y procesados)
-    - "keto": dieta muy baja en carbohidratos y alta en grasas para inducir cetosis
 
   - INFERENCIAS:
     - "no como carne" → ["vegetariano"]
     - "solo plantas" → ["vegano"]
     - "celíaco" → ["sin-gluten"]
     - "intolerante a la leche" → ["sin-lactosa"]
-    - "comida judía" / "mantengo dieta kosher" → ["kosher"]
-    - "no como cerdo" / "comida halal" → ["halal"]
-    - "dieta paleolítica" / "solo como natural, sin cereales" → ["paleo"]
-    - "dieta cetogénica" / "baja en carbohidratos" → ["keto"]
 
 * Variable: allergens (Array):
   - Valores permitidos: ["gluten", "lácteos", "huevo", "pescado", "mariscos", "soja", "frutos secos", "sésamo"]

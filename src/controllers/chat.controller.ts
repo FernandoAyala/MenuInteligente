@@ -47,23 +47,7 @@ export class ChatController {
     this.orderService = new OrderService();
     this.menuItemRepository = new MenuItemRepository();
     
-    this.recommendationService = new RecommendationService({
-      maxRecommendations: 3,
-      minRecommendations: 2,
-      enableSemanticScoring: false, // CRÍTICO: evita múltiples llamadas LLM
-      llmTimeout: 10000,
-      enableAuditLogs: false, // Reducir logs en dev
-      ensureDiversity: true,
-      categoryRepetitionPenalty: 0.3,
-      defaultWeights: {
-        safety: 1.0,
-        dietaryMatch: 0.30,
-        budgetFit: 0.15,
-        preferencesMatch: 0.35, // Más peso en preferencias
-        semanticScore: 0.0, // Desactivado
-        availability: 0.20
-      }
-    });
+    this.recommendationService = new RecommendationService();
   }
 
   /**

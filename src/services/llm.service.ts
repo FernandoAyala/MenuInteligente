@@ -373,18 +373,6 @@ CONTEXTO DE LA CONVERSACIÓN:
           if (r.includes('lactose') || r === 'sin-lactosa') {
             if (!item.isLactoseFree) return false;
           }
-          if (r === 'kosher') {
-            if (!item.isKosher) return false;
-          }
-          if (r === 'halal') {
-            if (!item.isHalal) return false;
-          }
-          if (r === 'paleo') {
-            if (!item.isPaleo) return false;
-          }
-          if (r === 'keto') {
-            if (!item.isKeto) return false;
-          }
         }
       }
 
@@ -447,18 +435,6 @@ CONTEXTO DE LA CONVERSACIÓN:
         }
         if (r.includes('lactose') || r === 'sin-lactosa') {
           if (!item.isLactoseFree) return false;
-        }
-        if (r === 'kosher') {
-          if (!item.isKosher) return false;
-        }
-        if (r === 'halal') {
-          if (!item.isHalal) return false;
-        }
-        if (r === 'paleo') {
-          if (!item.isPaleo) return false;
-        }
-        if (r === 'keto') {
-          if (!item.isKeto) return false;
         }
       }
       return item.available !== false;

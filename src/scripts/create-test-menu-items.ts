@@ -13,10 +13,6 @@ import { menuItemService } from '../services/menuItem.service';
 function createMenuItem(item: Partial<CreateMenuItemDto> & Pick<CreateMenuItemDto, 'name' | 'description' | 'price' | 'currency' | 'category' | 'available'>): CreateMenuItemDto {
     return {
         isLactoseFree: false,
-        isKosher: false,
-        isHalal: false,
-        isPaleo: false,
-        isKeto: false,
         isVegan: false,
         isVegetarian: false,
         isGlutenFree: false,
@@ -52,10 +48,6 @@ async function createTestMenuItems() {
                 isVegetarian: false,
                 isGlutenFree: false,
                 isLactoseFree: true,
-                isKosher: false,
-                isHalal: false,
-                isPaleo: false,
-                isKeto: false,
                 allergens: ['gluten', 'huevo'],
                 available: true,
             },

@@ -36,10 +36,6 @@ export interface MenuItem {
   isVegetarian: boolean;
   isGlutenFree: boolean;
   isLactoseFree: boolean;
-  isKosher: boolean;
-  isHalal: boolean;
-  isPaleo: boolean;
-  isKeto: boolean;
   allergens: string[];
   tags?: string[];
   available: boolean;

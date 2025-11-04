@@ -24,7 +24,6 @@ import {
   RankingResult,
 } from '../interfaces/recommendation.interface';
 import { MenuItemRepository } from '../repositories/menuItem.repository';
-// import { EnhancedLLMService } from './enhanced-llm.service'; // Task #43: Deshabilitado (semantic scoring off)
 import { LLMProviderType } from '../interfaces/llm.interface';
 import { RecommendationLogger } from '../utils/recommendation-logger';
 
@@ -34,16 +33,14 @@ import { RecommendationLogger } from '../utils/recommendation-logger';
 const DEFAULT_CONFIG: RecommendationServiceConfig = {
   maxRecommendations: 3,
   minRecommendations: 2,
-  enableSemanticScoring: false, // DESHABILITADO: Para evitar rate limits
   llmTimeout: 10000,
   enableAuditLogs: true,
   defaultWeights: {
-    safety: 1.0,            // CRÍTICO: 100% peso (elimina platos inseguros)
-    dietaryMatch: 0.30,   // 30% peso (aumentado desde 25%)
-    budgetFit: 0.20,      // 20% peso (aumentado desde 15%)
-    preferencesMatch: 0.30, // 30% peso (aumentado desde 20%)
-    semanticScore: 0.0,   // 0% peso (deshabilitado)
-    availability: 0.20,   // 20% peso (aumentado desde 15%)
+    safety: 1.0,              // CRÍTICO: 100% peso (elimina platos inseguros)
+    dietaryMatch: 0.30,       // 30% peso (aumentado desde 25%)
+    budgetFit: 0.20,          // 20% peso (aumentado desde 15%)
+    preferencesMatch: 0.30,   // 30% peso (aumentado desde 20%)
+    availability: 0.20,       // 20% peso (aumentado desde 15%)
   },
   ensureDiversity: true,
   categoryRepetitionPenalty: 0.3,
@@ -54,7 +51,6 @@ const DEFAULT_CONFIG: RecommendationServiceConfig = {
  */
 export class RecommendationService {
   private menuRepository: MenuItemRepository;
-  // private llmService: EnhancedLLMService;  // Task #43: Deshabilitado (semantic scoring off)
   private logger: RecommendationLogger;
   private config: RecommendationServiceConfig;
 
@@ -64,9 +60,6 @@ export class RecommendationService {
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.menuRepository = new MenuItemRepository();
-    // this.llmService = llmProvider 
-    //   ? new EnhancedLLMService(llmProvider)
-    //   : new EnhancedLLMService(); // Task #43: Deshabilitado
     this.logger = new RecommendationLogger();
     
     // Evitar warning de parámetro no usado
@@ -237,26 +230,6 @@ export class RecommendationService {
             conflictingRestrictions.push('sin lactosa');
             rejectionReasons.push('Contiene lactosa');
           }
-        } else if (restriction.includes('kosher')) {
-          if (!dish.isKosher) {
-            conflictingRestrictions.push('kosher');
-            rejectionReasons.push('No es kosher');
-          }
-        } else if (restriction.includes('halal')) {
-          if (!dish.isHalal) {
-            conflictingRestrictions.push('halal');
-            rejectionReasons.push('No es halal');
-          }
-        } else if (restriction.includes('paleo')) {
-          if (!dish.isPaleo) {
-            conflictingRestrictions.push('paleo');
-            rejectionReasons.push('No es paleo');
-          }
-        } else if (restriction.includes('keto')) {
-          if (!dish.isKeto) {
-            conflictingRestrictions.push('keto');
-            rejectionReasons.push('No es keto');
-          }
         }
       }
 
@@ -379,9 +352,6 @@ export class RecommendationService {
     // Score de preferencias
     const preferencesMatch = this.calculatePreferencesScore(dish, params.preferences);
 
-    // Score semántico: DESHABILITADO para evitar rate limits
-    const semanticScore = 50; // Valor neutral fijo
-
     // Score de disponibilidad (ya filtrado, siempre 100)
     const availability = 100;
 
@@ -390,7 +360,6 @@ export class RecommendationService {
       dietaryMatch,
       budgetFit,
       preferencesMatch,
-      semanticScore,
       availability,
       total: 0, // Se calcula después con pesos
       weights: { ...this.config.defaultWeights },
@@ -408,7 +377,6 @@ export class RecommendationService {
       scoreBreakdown.dietaryMatch * weights.dietaryMatch +
       scoreBreakdown.budgetFit * weights.budgetFit +
       scoreBreakdown.preferencesMatch * weights.preferencesMatch +
-      scoreBreakdown.semanticScore * weights.semanticScore +
       scoreBreakdown.availability * weights.availability;
 
     scoreBreakdown.total = Math.round(total * 100) / 100;
@@ -436,14 +404,6 @@ export class RecommendationService {
         if (dish.isGlutenFree) matches++;
       } else if (restriction.includes('lactose') || restriction.includes('lactosa')) {
         if (dish.isLactoseFree) matches++;
-      } else if (restriction.includes('kosher')) {
-        if (dish.isKosher) matches++;
-      } else if (restriction.includes('halal')) {
-        if (dish.isHalal) matches++;
-      } else if (restriction.includes('paleo')) {
-        if (dish.isPaleo) matches++;
-      } else if (restriction.includes('keto')) {
-        if (dish.isKeto) matches++;
       }
     }
 
@@ -673,10 +633,11 @@ export class RecommendationService {
     rankedDishes: Array<{ dish: any; scoreBreakdown: ScoreBreakdown; totalScore: number }>,
     params: RecommendationParams
   ): Promise<Recommendation[]> {
+    const orderedDishes = [...rankedDishes].sort((a, b) => b.totalScore - a.totalScore);
     const recommendations: Recommendation[] = [];
 
-    for (let i = 0; i < rankedDishes.length; i++) {
-      const item = rankedDishes[i];
+    for (let i = 0; i < orderedDishes.length; i++) {
+      const item = orderedDishes[i];
       
       // Generar justificación (Task #44)
       const justification = await this.generateJustification(item.dish, params, item.scoreBreakdown);
@@ -740,18 +701,6 @@ export class RecommendationService {
       }
       if (dish.isLactoseFree) {
         reasons.push('no contiene lactosa');
-      }
-      if (dish.isKosher) {
-        reasons.push('tiene certificación kosher');
-      }
-      if (dish.isHalal) {
-        reasons.push('tiene certificación halal');
-      }
-      if (dish.isPaleo) {
-        reasons.push('es paleo');
-      }
-      if (dish.isKeto) {
-        reasons.push('es keto');
       }
     }
 

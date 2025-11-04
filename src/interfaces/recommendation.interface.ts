@@ -137,9 +137,6 @@ export interface ScoreBreakdown {
   /** Score de match con preferencias declaradas (0-100) */
   preferencesMatch: number;
   
-  /** Score semántico del LLM (0-100) */
-  semanticScore: number;
-  
   /** Score de disponibilidad (100 si disponible, 0 si no) */
   availability: number;
   
@@ -152,7 +149,6 @@ export interface ScoreBreakdown {
     dietaryMatch: number;
     budgetFit: number;
     preferencesMatch: number;
-    semanticScore: number;
     availability: number;
   };
 }
@@ -265,9 +261,6 @@ export interface RecommendationServiceConfig {
   
   /** Número mínimo de recomendaciones a intentar devolver */
   minRecommendations: number;
-  
-  /** Habilitar scoring semántico con LLM */
-  enableSemanticScoring: boolean;
   
   /** Timeout para llamadas al LLM (ms) */
   llmTimeout: number;
