@@ -3,11 +3,13 @@ import { useOrders } from '../../hooks/useOrders';
 import { OrderStatus } from '../../services/api/ordersService';
 import { Command } from '../types/command.types';
 import CommandCard from './CommandCard';
+import OrderAnalyticsModal from './OrderAnalyticsModal';
 
 const CommandsBoard: React.FC = () => {
   const { orders: commands, loading, error, updateOrderStatus, refreshOrders, connected } = useOrders();
   const [filter, setFilter] = useState<'all' | Command['status']>('all');
   const [sortBy, setSortBy] = useState<'timestamp' | 'table' | 'status'>('timestamp');
+  const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
 
   const handleStatusChange = async (commandId: string, newStatus: Command['status']) => {
     try {
@@ -67,6 +69,14 @@ const CommandsBoard: React.FC = () => {
                 {connected ? 'Conectado' : 'Desconectado'}
               </span>
             </div>
+
+            {/* Botón de Análisis con IA */}
+            <button
+              onClick={() => setIsAnalyticsModalOpen(true)}
+              className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2"
+            >
+              📊 Análisis con IA
+            </button>
 
             <button
               onClick={handleRefresh}
@@ -162,6 +172,12 @@ const CommandsBoard: React.FC = () => {
       <div className="mt-8 text-center text-gray-500 text-sm">
         <p>Sistema de comandas actualizado automáticamente • Última actualización: {new Date().toLocaleTimeString('es-AR')}</p>
       </div>
+
+      {/* Modal de Análisis con IA */}
+      <OrderAnalyticsModal 
+        isOpen={isAnalyticsModalOpen}
+        onClose={() => setIsAnalyticsModalOpen(false)}
+      />
     </div>
   );
 };

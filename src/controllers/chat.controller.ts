@@ -966,7 +966,7 @@ export class ChatController {
         const dish = recommendations[0].dish;
         const specialInstructions = intents.entities?.specialInstructions;
         
-        let message = `¡Listo! He agregado **${dish.name}** ($${dish.price.toLocaleString()}) a tu carrito. 🛒`;
+        let message = `¡Listo! He agregado ${dish.name} ($${dish.price.toLocaleString()}) a tu carrito. 🛒`;
         
         if (specialInstructions) {
           message += `\n\n📝 Nota especial: ${specialInstructions}`;
@@ -980,7 +980,7 @@ export class ChatController {
       if (hasRecommendations && recommendations.length > 0) {
         if (recommendations.length === 1) {
           const dish = recommendations[0].dish;
-          return `¡Perfecto! Encontré esto para ti:\n\n**${dish.name}** - $${dish.price.toLocaleString()}\n${dish.description}\n\n¿Te gustaría agregarlo al carrito? 🛒`;
+          return `¡Perfecto! Encontré esto para ti:\n\n${dish.name} - $${dish.price.toLocaleString()}\n${dish.description}\n\n¿Te gustaría agregarlo al carrito? 🛒`;
         } else {
           return `¡Genial! Encontré ${recommendations.length} opciones para ti. 🍽️\n\nMira las opciones abajo y haz clic en "Agregar" en la que más te guste, o dime cuál prefieres.`;
         }
@@ -1030,7 +1030,7 @@ export class ChatController {
       }
       
       if (infoType === 'price') {
-        const priceInfo = found.map(d => `**${d.name}**: $${d.price}`).join('\n');
+        const priceInfo = found.map(d => `${d.name}: $${d.price}`).join('\n');
         let response = `Claro, aquí están los precios:\n\n${priceInfo}`;
         if (notFound.length > 0) {
           response += `\n\nNo encontré: ${notFound.join(', ')}`;
@@ -1122,7 +1122,7 @@ NO inventes ingredientes que no estén en la descripción original. Si la descri
             const allergenInfo = d.allergens && d.allergens.length > 0 
               ? `\n⚠️ Contiene: ${d.allergens.join(', ')}` 
               : '';
-            return `**${d.name}**: ${info}${allergenInfo}`;
+            return `${d.name}: ${info}${allergenInfo}`;
           }).join('\n\n');
           
           let response = `Por supuesto, aquí está la información:\n\n${ingredientsInfo}`;
@@ -1212,7 +1212,7 @@ NO inventes ingredientes que no estén en la descripción original. Si la descri
         });
         
         // FALLBACK: Usar descripción básica de Firestore
-        const detailsInfo = found.map(d => `**${d.name}** - $${d.price}\n${d.description || 'Plato delicioso preparado con ingredientes frescos'}`).join('\n\n');
+        const detailsInfo = found.map(d => `${d.name} - $${d.price}\n${d.description || 'Plato delicioso preparado con ingredientes frescos'}`).join('\n\n');
         let response = `Te cuento sobre ${found.length === 1 ? 'este plato' : 'estos platos'}:\n\n${detailsInfo}`;
         if (notFound.length > 0) {
           response += `\n\nNo encontré: ${notFound.join(', ')}`;

@@ -32,7 +32,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
     sessionId: urlSessionId || undefined, // Usar sessionId de la URL si existe
     enableWebSocket: false, // WebSocket no implementado en backend aún
     onBotMessage: (message) => {
-      console.log('📨 Nuevo mensaje del agente IA:', message);
       setIsTyping(false);
       
       // Detectar si el mensaje indica que se agregó algo al carrito
@@ -51,12 +50,10 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       const cartWasUpdated = addedToCartPhrases.some(phrase => contentLower.includes(phrase));
       
       if (cartWasUpdated) {
-        console.log('🛒 Carrito actualizado por el agente, recargando CartPanel...');
         setCartUpdateTrigger(prev => prev + 1);
       }
     },
-    onError: (error) => {
-      console.error('❌ Error en chat:', error);
+    onError: () => {
       setIsTyping(false);
     },
   });
@@ -74,15 +71,52 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   const [autoVoiceEnabled, setAutoVoiceEnabled] = useState<boolean>(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [cartUpdateTrigger, setCartUpdateTrigger] = useState(0); // Trigger para recargar el carrito
+  const [cartCounter, setCartCounter] = useState(0); // Contador local para forzar actualización
   const lastAutoSpokenMessageId = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Debug: Mostrar sessionId
+  // Limpiar localStorage cuando cambia la sesión
   useEffect(() => {
-    console.log('🔍 SessionId actual:', sessionId);
-    console.log('🔍 URL actual:', window.location.href);
-  }, [sessionId]);
+    if (sessionId) {
+      const lastSessionId = localStorage.getItem('last_session_id');
+      
+      if (lastSessionId !== sessionId) {
+        // Nueva sesión, limpiar carrito del localStorage
+        localStorage.removeItem('shopping_cart');
+        clearCart();
+        localStorage.setItem('last_session_id', sessionId);
+      }
+    }
+  }, [sessionId, clearCart]);
+
+  // Sincronizar contador con carrito del backend cuando cambia el sessionId o llega un nuevo mensaje
+  useEffect(() => {
+    const syncCartFromBackend = async () => {
+      if (!sessionId) return;
+
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const response = await fetch(`${API_URL}/api/sessions/${sessionId}`);
+        
+        if (response.ok) {
+          const sessionData = await response.json();
+          const backendCart = sessionData.data?.cart || sessionData.cart || [];
+          
+          // Calcular total de items (sumando cantidades)
+          const totalItems = backendCart.reduce((total: number, item: any) => {
+            return total + (item.quantity || 1);
+          }, 0);
+          
+          setCartCounter(totalItems);
+        }
+      } catch (error) {
+        // Error silencioso
+      }
+    };
+
+    syncCartFromBackend();
+  }, [sessionId, messages.length]);
 
   // Auto-scroll al final cuando hay nuevos mensajes
   const scrollToBottom = () => {
@@ -96,7 +130,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   // Mostrar error si existe
   useEffect(() => {
     if (chatError) {
-      console.error('❌ Error de chat:', chatError);
       // Aquí podrías mostrar un toast o notificación al usuario
     }
   }, [chatError]);
@@ -159,7 +192,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       // isTyping se desactiva en el callback onBotMessage
     } catch (error) {
       setIsTyping(false);
-      console.error('Error al enviar mensaje:', error);
     }
   };
 
@@ -169,8 +201,8 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
     handleSendMessage(message);
   };
 
-  const handleAddToCart = (item: MenuItem) => {
-    addToCart(item, 1);
+  const handleAddToCart = async (item: MenuItem) => {
+    await addToCart(item, 1);
     
     // Incrementar trigger para que CartPanel recargue
     setCartUpdateTrigger(prev => prev + 1);
@@ -193,7 +225,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   };
 
   const handleVoiceCommand = (action: string, data?: any, response?: string) => {
-    console.log('🎤 Comando de voz recibido:', { action, data, response });
 
     // Ejecutar acción específica
     switch (action) {
@@ -304,8 +335,18 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
     }
   };
 
+  // Sincronizar contador local con cartItems (solo cuando se usa el botón manual)
+  useEffect(() => {
+    const total = getTotalItems();
+    
+    // Solo actualizar si hay items en localStorage (se agregó manualmente)
+    if (total > 0) {
+      setCartCounter(prev => Math.max(prev, total)); // Usar el máximo para no sobrescribir el backend
+    }
+  }, [cartItems, getTotalItems]);
+
   const getTotalCartItems = () => {
-    return getTotalItems();
+    return cartCounter;
   };
 
   const getConnectionIcon = () => {
@@ -314,17 +355,12 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
 
   const handleConfirmOrder = async (cartItems: any[]) => {
     try {
-      console.log('📦 Confirmando pedido desde sesión');
-      console.log('🛒 Items del carrito:', cartItems);
-
       if (!sessionId) {
-        console.error('❌ No hay sessionId');
         alert('Error: No se pudo identificar la sesión');
         return;
       }
 
       if (!cartItems || cartItems.length === 0) {
-        console.error('❌ Carrito vacío');
         alert('El carrito está vacío');
         return;
       }
@@ -337,11 +373,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
 
       // Si la sesión ya tiene mesa asignada, usarla. Si no, generar una nueva
       const tableNumber = session?.tableNumber || Math.floor(Math.random() * 20) + 1;
-      
-      console.log(session?.tableNumber 
-        ? `🍽️ Usando mesa existente: ${tableNumber}` 
-        : `🍽️ Asignando nueva mesa: ${tableNumber}`
-      );
 
       // Convertir items del carrito al formato esperado por el backend
       const formattedCartItems = cartItems.map(item => ({
@@ -360,8 +391,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         customerNotes: 'Pedido desde chat',
       };
 
-      console.log('📨 Enviando orden al backend:', orderData);
-
       // Enviar directamente al endpoint POST /api/orders
       const response = await fetch(`${API_URL}/api/orders`, {
         method: 'POST',
@@ -379,8 +408,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       const result = await response.json();
       const createdOrder = result.data;
 
-      console.log('✅ Orden creada exitosamente:', createdOrder);
-
       // NO limpiar el carrito local - dejamos que el backend marque como confirmados
       // clearCart(); // ❌ COMENTADO
 
@@ -395,20 +422,12 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         setIsCartOpen(true);
       }, 500);
 
-      // Crear mensaje de confirmación para el chat
-      const confirmationMessage = `✅ ¡Pedido confirmado exitosamente!\n\n🍽️ Mesa: ${tableNumber}\n📋 Orden: #${createdOrder.id}\n💰 Total: $${createdOrder.totalAmount.toLocaleString()}\n\n👨‍🍳 Tu pedido ha sido enviado a la cocina y estará listo pronto. ¡Buen provecho!`;
-      
-      // Agregar el mensaje al chat (simulando respuesta del agente IA)
-      // Nota: Idealmente esto debería venir del backend, pero lo agregamos aquí para feedback inmediato
-      console.log('📣 Confirmación:', confirmationMessage);
-
-      // Mostrar también un alert para asegurar que el usuario lo vea
+      // Mostrar un alert para confirmar al usuario
       setTimeout(() => {
         alert(`✅ Pedido confirmado!\n\nMesa: ${tableNumber}\nOrden: #${createdOrder.id}\nTotal: $${createdOrder.totalAmount.toLocaleString()}\n\nLa orden ha sido enviada a la cocina.`);
       }, 300);
 
     } catch (error) {
-      console.error('❌ Error al confirmar pedido:', error);
       alert(`❌ Error al confirmar el pedido: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   };
@@ -533,14 +552,6 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
             const isLatestBotMessage = message.type === 'bot' && index === messages.length - 1;
             const shouldAutoSpeak = autoVoiceEnabled && isLatestBotMessage && 
               message.id !== lastAutoSpokenMessageId.current;
-            
-            console.log('🎯 Debug auto-speak:', {
-              messageId: message.id,
-              isLatestBot: isLatestBotMessage,
-              autoVoiceEnabled,
-              lastSpoken: lastAutoSpokenMessageId.current,
-              shouldAutoSpeak
-            });
             
             return (
               <MessageBubble

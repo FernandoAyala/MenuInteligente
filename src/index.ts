@@ -33,6 +33,7 @@ app.use(express.urlencoded({ extended: true }));
 initializeFirebase();
 
 // Importar rutas
+import analyticsRoutes from './routes/analytics.routes';
 import chatRoutes from './routes/chat.routes';
 import llmRoutes from './routes/llm.routes';
 import menuItemRoutes from './routes/menuItem.routes';
@@ -65,7 +66,8 @@ app.get('/', (_req, res) => {
       recommendations: '/api/recommendations',
       orders: '/api/orders',
       sessions: '/api/sessions',
-      menuItems: '/api/menu-items'
+      menuItems: '/api/menu-items',
+      analytics: '/api/analytics'
     },
     frontend: config.nodeEnv === 'production' 
       ? 'Serving static files' 
@@ -74,6 +76,7 @@ app.get('/', (_req, res) => {
 });
 
 // Rutas de la API
+app.use('/api/analytics', analyticsRoutes); // Análisis de ventas con IA
 app.use('/api/chat', chatRoutes); // Epic #60: API Conversacional
 app.use('/api/llm', llmRoutes);
 app.use('/api/recommendations', recommendationsRoutes);

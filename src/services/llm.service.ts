@@ -1,13 +1,13 @@
-import { LLMProviderFactory } from '../providers/llm.factory';
 import { ILLMProvider, LLMMessage, LLMProviderType, MessageRole } from '../interfaces/llm.interface';
-import { 
-  NLUPrompts, 
-  IntentExtractionResult
-} from '../prompts/nlu.prompts';
 import {
-  GenerationPrompts,
-  formatOrderSummary,
+    GenerationPrompts,
+    formatOrderSummary,
 } from '../prompts/generation.prompts';
+import {
+    IntentExtractionResult,
+    NLUPrompts
+} from '../prompts/nlu.prompts';
+import { LLMProviderFactory } from '../providers/llm.factory';
 
 /**
  * Servicio avanzado de LLM con capacidades mejoradas de NLU
@@ -35,6 +35,32 @@ export class LLMService {
    */
   getCurrentProvider(): string {
     return this.provider.getProviderName();
+  }
+
+  /**
+   * Genera una respuesta de texto libre basada en un prompt
+   * Útil para análisis, resúmenes, y respuestas generales
+   */
+  async generateTextResponse(prompt: string, options?: {
+    temperature?: number;
+    maxTokens?: number;
+  }): Promise<string> {
+    const systemPrompt: LLMMessage = {
+      role: MessageRole.SYSTEM,
+      content: prompt,
+    };
+
+    try {
+      const response = await this.provider.generateResponse([systemPrompt], {
+        temperature: options?.temperature || 0.7,
+        maxTokens: options?.maxTokens || 1000,
+      });
+
+      return response.content;
+    } catch (error) {
+      console.error('Error generating text response:', error);
+      throw error;
+    }
   }
 
   // ============================================================================
