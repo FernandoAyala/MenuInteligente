@@ -8,6 +8,7 @@ import {
     NLUPrompts
 } from '../prompts/nlu.prompts';
 import { LLMProviderFactory } from '../providers/llm.factory';
+import { config } from '../config/env.config';
 
 /**
  * Servicio avanzado de LLM con capacidades mejoradas de NLU
@@ -16,11 +17,39 @@ import { LLMProviderFactory } from '../providers/llm.factory';
  */
 export class LLMService {
   private provider: ILLMProvider;
+  private currentProviderType: LLMProviderType;
+  private readonly fallbackProviderType?: LLMProviderType;
+  private readonly primaryProviderType: LLMProviderType;
 
-  constructor(providerType?: LLMProviderType) {
-    this.provider = providerType
-      ? LLMProviderFactory.getProvider(providerType)
-      : LLMProviderFactory.getDefaultProvider();
+  constructor(providerType?: LLMProviderType, fallbackProviderType?: LLMProviderType) {
+    const resolvedPrimary =
+      providerType ??
+      this.resolveProviderFromConfig(config.llm?.defaultProvider) ??
+      LLMProviderType.OPENAI;
+
+    this.primaryProviderType = resolvedPrimary;
+    this.currentProviderType = resolvedPrimary;
+    this.provider = LLMProviderFactory.getProvider(resolvedPrimary);
+
+    const resolvedFallback =
+      fallbackProviderType ??
+      this.resolveProviderFromConfig(config.llm?.fallbackProvider);
+
+    this.fallbackProviderType =
+      resolvedFallback && resolvedFallback !== resolvedPrimary ? resolvedFallback : undefined;
+  }
+
+  private resolveProviderFromConfig(
+    provider?: string | LLMProviderType | null
+  ): LLMProviderType | undefined {
+    if (!provider) {
+      return undefined;
+    }
+
+    const normalized = provider.toString().toLowerCase();
+    return (Object.values(LLMProviderType) as string[]).includes(normalized)
+      ? (normalized as LLMProviderType)
+      : undefined;
   }
 
   /**
@@ -28,6 +57,7 @@ export class LLMService {
    */
   setProvider(providerType: LLMProviderType): void {
     this.provider = LLMProviderFactory.getProvider(providerType);
+    this.currentProviderType = providerType;
   }
 
   /**
@@ -51,10 +81,12 @@ export class LLMService {
     };
 
     try {
-      const response = await this.provider.generateResponse([systemPrompt], {
-        temperature: options?.temperature || 0.7,
-        maxTokens: options?.maxTokens || 1000,
-      });
+      const response = await this.executeWithFallback((provider: ILLMProvider) =>
+        provider.generateResponse([systemPrompt], {
+          temperature: options?.temperature || 0.7,
+          maxTokens: options?.maxTokens || 1000,
+        })
+      );
 
       return response.content;
     } catch (error) {
@@ -83,10 +115,12 @@ export class LLMService {
     };
 
     try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.3,
-        maxTokens: 800,
-      });
+      const response = await this.executeWithFallback((provider: ILLMProvider) =>
+        provider.generateResponse([systemPrompt, userPrompt], {
+          temperature: 0.3,
+          maxTokens: 800,
+        })
+      );
 
       return this.parseStructuredResponse<IntentExtractionResult>(response.content);
     } catch (error) {
@@ -138,10 +172,12 @@ ${JSON.stringify(params.intent.entities, null, 2)}`,
     });
 
     try {
-      const response = await this.provider.generateResponse(messages, {
-        temperature: 0.7,
-        maxTokens: 1200,
-      });
+      const response = await this.executeWithFallback((provider: ILLMProvider) =>
+        provider.generateResponse(messages, {
+          temperature: 0.7,
+          maxTokens: 1200,
+        })
+      );
 
       return response.content;
     } catch (error) {
@@ -181,10 +217,12 @@ ${allergyInfo.length > 0 ? `ALERGIAS DEL CLIENTE:\n${allergyInfo.join(', ')}` : 
     };
 
     try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.3, // Baja para respuestas precisas sobre seguridad
-        maxTokens: 800,
-      });
+      const response = await this.executeWithFallback((provider: ILLMProvider) =>
+        provider.generateResponse([systemPrompt, userPrompt], {
+          temperature: 0.3, // Baja para respuestas precisas sobre seguridad
+          maxTokens: 800,
+        })
+      );
 
       return response.content;
     } catch (error) {
@@ -228,10 +266,12 @@ ${JSON.stringify(suitableItems, null, 2)}`,
     };
 
     try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.7,
-        maxTokens: 1000,
-      });
+      const response = await this.executeWithFallback((provider: ILLMProvider) =>
+        provider.generateResponse([systemPrompt, userPrompt], {
+          temperature: 0.7,
+          maxTokens: 1000,
+        })
+      );
 
       return response.content;
     } catch (error) {
@@ -265,10 +305,12 @@ ${JSON.stringify(suitableItems, null, 2)}`,
     };
 
     try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.5,
-        maxTokens: 600,
-      });
+      const response = await this.executeWithFallback((provider: ILLMProvider) =>
+        provider.generateResponse([systemPrompt, userPrompt], {
+          temperature: 0.5,
+          maxTokens: 600,
+        })
+      );
 
       return response.content;
     } catch (error) {
@@ -305,15 +347,67 @@ CONTEXTO DE LA CONVERSACIÓN:
     };
 
     try {
-      const response = await this.provider.generateResponse([systemPrompt, userPrompt], {
-        temperature: 0.8,
-        maxTokens: 200,
-      });
+      const response = await this.executeWithFallback((provider: ILLMProvider) =>
+        provider.generateResponse([systemPrompt, userPrompt], {
+          temperature: 0.8,
+          maxTokens: 200,
+        })
+      );
 
       return response.content;
     } catch (error) {
       console.error('Error generating follow-up:', error);
       return '¿En qué más te puedo ayudar?';
+    }
+  }
+
+  private async executeWithFallback<T>(
+    action: (provider: ILLMProvider) => Promise<T>
+  ): Promise<T> {
+    try {
+      return await action(this.provider);
+    } catch (primaryError) {
+      if (
+        !this.fallbackProviderType ||
+        this.currentProviderType === this.fallbackProviderType
+      ) {
+        throw primaryError;
+      }
+
+      console.warn(
+        `[LLMService] Error con proveedor "${this.currentProviderType}" (primario: "${this.primaryProviderType}"). Intentando fallback "${this.fallbackProviderType}".`,
+        primaryError
+      );
+
+      const previousProvider = this.provider;
+      const previousType = this.currentProviderType;
+
+      try {
+        const fallbackProvider = LLMProviderFactory.getProvider(this.fallbackProviderType);
+        this.provider = fallbackProvider;
+        this.currentProviderType = this.fallbackProviderType;
+
+        return await action(this.provider);
+      } catch (fallbackError) {
+        this.provider = previousProvider;
+        this.currentProviderType = previousType;
+
+        console.error(
+          `[LLMService] Fallback "${this.fallbackProviderType}" también falló. Restableciendo proveedor "${previousType}".`,
+          fallbackError
+        );
+
+        if (fallbackError instanceof Error) {
+          (fallbackError as Error & { primaryError?: unknown }).primaryError = primaryError;
+          throw fallbackError;
+        }
+
+        const wrappedError = new Error(
+          `Fallback provider "${this.fallbackProviderType}" failed after primary "${previousType}" error: ${String(fallbackError)}`
+        );
+        (wrappedError as Error & { primaryError?: unknown }).primaryError = primaryError;
+        throw wrappedError;
+      }
     }
   }
 

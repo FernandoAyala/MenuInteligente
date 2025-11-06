@@ -26,6 +26,7 @@ export const config = {
 
   llm: {
     defaultProvider: process.env.LLM_DEFAULT_PROVIDER || 'openai',
+    fallbackProvider: process.env.LLM_FALLBACK_PROVIDER,
   },
   
   allowedOrigins: process.env.ALLOWED_ORIGINS 
