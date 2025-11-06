@@ -21,7 +21,7 @@ import { MessageRole as LLMMessageRole } from '../interfaces/llm.interface';
 import { Recommendation } from '../interfaces/recommendation.interface';
 import { withTimeout } from '../middleware/error-handler.middleware';
 import { MenuItem, SpicyLevel } from '../models/menuItem.model';
-import { ConversationSlots, MessageRole } from '../models/session.model';
+import { CartItem, ConversationSlots, MessageRole } from '../models/session.model';
 import { MenuItemRepository } from '../repositories/menuItem.repository';
 import { SessionRepository } from '../repositories/session.repository';
 import { cacheService } from '../services/cache.service';
@@ -162,6 +162,21 @@ export class ChatController {
         actions: actions.map(a => ({ type: a.type, label: a.label }))
       });
 
+      // 🔍 MEJORAR DETECCIÓN: Comandos explícitos de acción
+      // Si el usuario usa verbos de acción explícitos (agregar, añadir, poner, etc.),
+      // forzamos la acción correspondiente incluso si el LLM no la detectó bien
+      const messageLower = chatRequest.message.toLowerCase();
+      const explicitAddKeywords = ['agregar', 'añadir', 'añade', 'agrega', 'pon', 'ponme', 'poner'];
+      const hasExplicitAdd = explicitAddKeywords.some(kw => messageLower.includes(kw));
+      
+      if (hasExplicitAdd && !actions.some(a => a.type === ChatActionType.ADD_TO_CART)) {
+        logger.info('Detected explicit ADD command, forcing ADD_TO_CART action', { 
+          sessionId, 
+          message: chatRequest.message 
+        });
+        actions.push(createChatAction(ChatActionType.ADD_TO_CART, 'Agregar al carrito'));
+      }
+      
       // 🔍 FALLBACK: Detectar platos mencionados por palabras clave SOLO si el LLM FALLÓ
       // Si el LLM funcionó correctamente, confiamos en su análisis semántico
       if (llmFailed && (!intents.entities?.dishesMetioned || intents.entities.dishesMetioned.length === 0)) {
@@ -173,7 +188,6 @@ export class ChatController {
         try {
           // Buscar platos por coincidencia de texto en el mensaje
           const allMenuItems = await this.menuItemRepository.findAllAvailable();
-          const messageLower = chatRequest.message.toLowerCase();
           
           const matchedDishes = allMenuItems.filter((item: MenuItem) => {
             const nameLower = item.name.toLowerCase();
@@ -326,6 +340,9 @@ export class ChatController {
         }
       }
 
+      // Variable para trackear si se agregó automáticamente al carrito
+      let autoAddedToCart = false;
+      
       if (needsDirectAddToCart) {
         try {
           logger.info('Detecting direct add to cart request', { 
@@ -391,42 +408,74 @@ export class ChatController {
               notFoundCount: notFound.length 
             });
 
-            // AGREGAR AUTOMÁTICAMENTE AL CARRITO EN EL BACKEND
-            try {
-              const specialInstructions = intents.entities?.specialInstructions || '';
+            // ✅ DECIDIR SI AGREGAR AUTOMÁTICAMENTE O SOLO MOSTRAR
+            // Si el usuario usó un comando EXPLÍCITO (agregar, añadir, poner),
+            // agregamos automáticamente al carrito
+            const explicitAddKeywords = ['agregar', 'añadir', 'añade', 'agrega', 'pon', 'ponme', 'poner'];
+            const hasExplicitAddCommand = explicitAddKeywords.some(kw => chatRequest.message.toLowerCase().includes(kw));
+            
+            if (hasExplicitAddCommand) {
+              // Comando explícito: agregar automáticamente
+              logger.info('Explicit ADD command detected, adding to cart automatically', { sessionId });
+              autoAddedToCart = true; // Marcar que se agregó automáticamente
               
-              for (const dish of found) {
-                // Construir el item del carrito
-                const cartItem = {
-                  menuItemId: dish.id,
-                  name: dish.name,
-                  price: dish.price,
-                  currency: dish.currency,
-                  quantity: 1,
-                  specifications: [] as string[],
-                  specialInstructions: specialInstructions || undefined,
-                };
+              try {
+                const specialInstructions = intents.entities?.specialInstructions || '';
+                
+                for (const dish of found) {
+                  const currentSession = await this.sessionRepository.findById(session.id);
+                  if (currentSession) {
+                    const currentCart = currentSession.cart || [];
+                    
+                    // Buscar si existe un item PENDIENTE con el mismo menuItemId y specialInstructions
+                    const existingPendingIndex = currentCart.findIndex(
+                      item => item.menuItemId === dish.id 
+                        && !item.confirmed 
+                        && (item.specialInstructions || '') === (specialInstructions || '')
+                    );
 
-                // Agregar al carrito de la sesión
-                const currentSession = await this.sessionRepository.findById(session.id);
-                if (currentSession) {
-                  const updatedCart = [...(currentSession.cart || []), cartItem];
-                  await this.sessionRepository.update(session.id, {
-                    cart: updatedCart,
-                    updatedAt: new Date(),
-                  });
+                    if (existingPendingIndex >= 0) {
+                      currentCart[existingPendingIndex].quantity += 1;
+                      logger.info('Pending item quantity increased', {
+                        sessionId: session.id,
+                        dish: dish.name,
+                        newQuantity: currentCart[existingPendingIndex].quantity,
+                      });
+                    } else {
+                      const newItem: CartItem = {
+                        menuItemId: dish.id,
+                        quantity: 1,
+                      };
+                      
+                      if (specialInstructions) {
+                        newItem.specialInstructions = specialInstructions;
+                      }
+                      
+                      currentCart.push(newItem);
+                      logger.info('Item added to cart automatically', {
+                        sessionId: session.id,
+                        dish: dish.name,
+                        specialInstructions: specialInstructions || 'none',
+                      });
+                    }
 
-                  logger.info('Item added to cart automatically', {
-                    sessionId: session.id,
-                    dish: dish.name,
-                    specialInstructions: specialInstructions || 'none',
-                  });
+                    await this.sessionRepository.update(session.id, {
+                      cart: currentCart,
+                      updatedAt: new Date(),
+                    });
+                  }
                 }
+              } catch (cartError) {
+                logger.error('Failed to add to cart automatically', {
+                  sessionId: session.id,
+                  error: cartError instanceof Error ? cartError.message : 'Unknown',
+                });
               }
-            } catch (cartError) {
-              logger.error('Failed to add items to cart automatically', {
+            } else {
+              // Sin comando explícito: solo mostrar opciones
+              logger.info('No explicit command, showing recommendations only', {
                 sessionId: session.id,
-                error: cartError instanceof Error ? cartError.message : 'Unknown',
+                dishCount: found.length,
               });
             }
           } else {
@@ -491,30 +540,13 @@ export class ChatController {
               itemCount: pendingItems.length,
             });
 
-            // MARCAR items como confirmados (en lugar de vaciar)
-            const updatedCart = currentCart.map(item => {
-              // Si el item estaba pendiente, marcarlo como confirmado
-              if (!item.confirmed) {
-                return {
-                  ...item,
-                  confirmed: true,
-                  orderId: order.id,
-                  confirmedAt: new Date(),
-                };
-              }
-              // Si ya estaba confirmado, mantenerlo igual
-              return item;
-            });
-
-            await this.sessionRepository.update(session.id, {
-              cart: updatedCart,
-              updatedAt: new Date(),
-            });
-
-            logger.info('Cart items marked as confirmed', { 
+            // ⚠️ NO es necesario actualizar el carrito aquí porque orderService.createFromCart
+            // ya se encarga de marcar los items como confirmados con la lógica correcta.
+            // Esto evita problemas de duplicación cuando se agrega el mismo plato nuevamente.
+            
+            logger.info('Cart items marked as confirmed by OrderService', { 
               sessionId: session.id,
-              confirmedCount: pendingItems.length,
-              totalInCart: updatedCart.length
+              confirmedCount: pendingItems.length
             });
           }
         } catch (orderError) {
@@ -531,7 +563,8 @@ export class ChatController {
         intents, 
         actions, 
         recommendations,
-        updatedSlots
+        updatedSlots,
+        autoAddedToCart // Pasar info de si se agregó automáticamente
       );
 
       // Si se creó un pedido, modificar el mensaje para incluir el ID
@@ -574,78 +607,28 @@ export class ChatController {
           slots: updatedSlots
         });
 
-        // 6.1 Agregar items al carrito si se detectó acción ADD_TO_CART
+        // 6.1 NO AGREGAR AUTOMÁTICAMENTE - Solo mostrar recomendaciones
+        // ℹ️ DESHABILITADO: Auto-agregar al carrito
+        // 
+        // Anteriormente, cuando se detectaba ADD_TO_CART + recomendaciones,
+        // se agregaba automáticamente el primer item recomendado al carrito.
+        // 
+        // NUEVO COMPORTAMIENTO:
+        // - Solo mostramos las recomendaciones al usuario
+        // - El usuario decide si quiere agregarlas usando:
+        //   1. Botones de la interfaz en las tarjetas de recomendación
+        //   2. Comandos explícitos por voz
+        //   3. Confirmación manual
+        //
+        // Esto evita agregar items cuando el usuario solo está explorando
+        // (ej: "quiero ensalada" → debe mostrar opciones, no agregar automáticamente)
+        
         if (actions.some(a => a.type === ChatActionType.ADD_TO_CART) && recommendations && recommendations.length > 0) {
-          try {
-            // Obtener el carrito actual
-            const currentCart = session.cart || [];
-            
-            // Agregar el primer item recomendado al carrito (el más relevante)
-            const itemToAdd = recommendations[0];
-            
-            // Extraer instrucciones especiales del mensaje del usuario
-            const specialInstructions = intents.entities?.specialInstructions || '';
-            
-            logger.info('Adding item to cart with special instructions', {
-              sessionId: session.id,
-              itemName: itemToAdd.dish.name,
-              specialInstructions: specialInstructions,
-              rawMessage: chatRequest.message
-            });
-            
-            // Verificar si ya existe en el carrito
-            const existingItemIndex = currentCart.findIndex(
-              item => item.menuItemId === itemToAdd.dish.id
-            );
-
-            if (existingItemIndex >= 0) {
-              // Si ya existe, incrementar cantidad y actualizar instrucciones si hay nuevas
-              currentCart[existingItemIndex].quantity += 1;
-              if (specialInstructions) {
-                // Combinar instrucciones existentes con las nuevas
-                const existingInstructions = currentCart[existingItemIndex].specialInstructions || '';
-                currentCart[existingItemIndex].specialInstructions = existingInstructions 
-                  ? `${existingInstructions}; ${specialInstructions}`
-                  : specialInstructions;
-              }
-              logger.info('Item quantity increased in cart', {
-                sessionId: session.id,
-                menuItemId: itemToAdd.dish.id,
-                newQuantity: currentCart[existingItemIndex].quantity,
-                specialInstructions: currentCart[existingItemIndex].specialInstructions
-              });
-            } else {
-              // Si no existe, agregar nuevo item con instrucciones
-              currentCart.push({
-                menuItemId: itemToAdd.dish.id,
-                quantity: 1,
-                specialInstructions: specialInstructions
-              });
-              logger.info('New item added to cart', {
-                sessionId: session.id,
-                menuItemId: itemToAdd.dish.id,
-                menuItemName: itemToAdd.dish.name,
-                specialInstructions: specialInstructions
-              });
-            }
-
-            // Actualizar el carrito en la sesión
-            await this.sessionRepository.update(session.id, {
-              cart: currentCart
-            });
-
-            logger.info('Cart updated successfully', {
-              sessionId: session.id,
-              cartSize: currentCart.length,
-              totalItems: currentCart.reduce((sum, item) => sum + item.quantity, 0)
-            });
-          } catch (cartError) {
-            logger.error('Failed to update cart', {
-              sessionId: session.id,
-              error: cartError instanceof Error ? cartError.message : 'Unknown'
-            });
-            // No lanzar error, continuar con la respuesta
-          }
+          logger.info('Recommendations generated - waiting for user to add manually', {
+            sessionId: session.id,
+            recommendationCount: recommendations.length,
+            topRecommendation: recommendations[0]?.dish.name
+          });
         }
 
         // 6.2 Eliminar items del carrito si se detectó acción REMOVE_FROM_CART
@@ -843,15 +826,26 @@ export class ChatController {
       for (const dishName of dishNames) {
         const normalizedDish = normalize(dishName);
         
-        // Buscar coincidencia exacta o parcial
-        const match = availableItems.find(item => {
+        // Buscar TODAS las coincidencias parciales (ej: "ensalada" → todas las ensaladas)
+        const matches = availableItems.filter(item => {
           const normalizedItemName = normalize(item.name);
+          const normalizedCategory = normalize(item.category || '');
+          const normalizedDescription = normalize(item.description || '');
+          
+          // Coincide si el nombre, categoría o descripción contienen la palabra buscada
           return normalizedItemName.includes(normalizedDish) || 
-                 normalizedDish.includes(normalizedItemName);
+                 normalizedDish.includes(normalizedItemName) ||
+                 normalizedCategory.includes(normalizedDish) ||
+                 normalizedDescription.includes(normalizedDish);
         });
 
-        if (match) {
-          found.push(match);
+        if (matches.length > 0) {
+          // Agregar todos los matches encontrados (evitar duplicados)
+          matches.forEach(match => {
+            if (!found.some(f => f.id === match.id)) {
+              found.push(match);
+            }
+          });
         } else {
           notFound.push(dishName);
         }
@@ -872,7 +866,8 @@ export class ChatController {
     intents: any, 
     actions: ChatAction[],
     recommendations?: any[],
-    slots?: ConversationSlots
+    slots?: ConversationSlots,
+    autoAddedToCart?: boolean
   ): Promise<string> {
     const hasRecommendations = recommendations && recommendations.length > 0;
     const actionTypes = actions.map(a => a.type);
@@ -964,25 +959,34 @@ export class ChatController {
       return 'Déjame buscar las mejores opciones para ti...';
     }
 
-    // 4. AGREGAR AL CARRITO
+    // 4. MOSTRAR RECOMENDACIONES O CONFIRMAR AGREGADO
     if (actionTypes.includes(ChatActionType.ADD_TO_CART)) {
-      // Si hay recomendaciones, mencionar el plato específico que se agregó
-      if (hasRecommendations && recommendations.length > 0) {
-        const addedDish = recommendations[0].dish;
+      // Si se agregó automáticamente al carrito
+      if (autoAddedToCart && hasRecommendations && recommendations.length > 0) {
+        const dish = recommendations[0].dish;
         const specialInstructions = intents.entities?.specialInstructions;
         
-        let message = `¡Excelente elección! He agregado **${addedDish.name}** ($${addedDish.price.toLocaleString()}) a tu carrito. 🛒`;
+        let message = `¡Listo! He agregado **${dish.name}** ($${dish.price.toLocaleString()}) a tu carrito. 🛒`;
         
-        // Si hay instrucciones especiales, mencionarlas en la respuesta
         if (specialInstructions) {
           message += `\n\n📝 Nota especial: ${specialInstructions}`;
         }
         
-        message += `\n\n¿Quieres agregar algo más o prefieres ver tu carrito?`;
-        
+        message += `\n\n¿Quieres agregar algo más o ver tu carrito?`;
         return message;
       }
-      return '¡Excelente elección! Lo agregaré a tu pedido. ¿Algo más que te gustaría añadir?';
+      
+      // Si NO se agregó automáticamente, mostrar opciones
+      if (hasRecommendations && recommendations.length > 0) {
+        if (recommendations.length === 1) {
+          const dish = recommendations[0].dish;
+          return `¡Perfecto! Encontré esto para ti:\n\n**${dish.name}** - $${dish.price.toLocaleString()}\n${dish.description}\n\n¿Te gustaría agregarlo al carrito? 🛒`;
+        } else {
+          return `¡Genial! Encontré ${recommendations.length} opciones para ti. 🍽️\n\nMira las opciones abajo y haz clic en "Agregar" en la que más te guste, o dime cuál prefieres.`;
+        }
+      }
+      // Si no hay recomendaciones específicas, mensaje genérico
+      return '¡Claro! Déjame mostrarte las opciones disponibles. ¿Hay algo en particular que busques?';
     }
 
     // 5. VER CARRITO / SOLICITAR CUENTA

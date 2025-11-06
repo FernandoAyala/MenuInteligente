@@ -376,21 +376,23 @@ export const useShoppingCart = () => {
         const sessionResponse = await fetch(`${API_URL}/api/sessions/${urlSessionId}`);
         if (sessionResponse.ok) {
           const sessionData = await sessionResponse.json();
-          const currentCart = sessionData.cart || [];
+          const currentCart = sessionData.data?.cart || sessionData.cart || [];
           
-          // Actualizar el carrito
-          const existingItemIndex = currentCart.findIndex((cartItem: any) => cartItem.menuItemId === item.id);
+          // Buscar si existe un item PENDIENTE (no confirmado) con el mismo menuItemId
+          const existingPendingIndex = currentCart.findIndex(
+            (cartItem: any) => cartItem.menuItemId === item.id && !cartItem.confirmed
+          );
           
           let updatedCart;
-          if (existingItemIndex > -1) {
-            // Incrementar cantidad
+          if (existingPendingIndex > -1) {
+            // Si existe un item pendiente, incrementar su cantidad
             updatedCart = currentCart.map((cartItem: any, index: number) =>
-              index === existingItemIndex
+              index === existingPendingIndex
                 ? { ...cartItem, quantity: cartItem.quantity + quantity }
                 : cartItem
             );
           } else {
-            // Agregar nuevo item
+            // Si no existe pendiente (o existe pero está confirmado), agregar nuevo item
             updatedCart = [
               ...currentCart,
               {

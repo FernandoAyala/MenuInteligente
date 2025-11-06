@@ -92,25 +92,39 @@ export class OrderService {
       const session = await this.sessionRepository.findById(sessionId);
       if (session) {
         // Actualizar solo los items del carrito que se acaban de confirmar
-        const updatedCart = session.cart.map(cartItem => {
-          // Buscar si este item está en los cartItems que se confirmaron
-          const wasOrdered = cartItems.some(orderedItem => 
+        // IMPORTANTE: Solo confirmamos los items pendientes (no confirmed)
+        // Para evitar marcar duplicados cuando se agrega el mismo plato otra vez
+        const updatedCart: CartItem[] = [];
+        const itemsToConfirm = [...cartItems]; // Items pendientes que necesitan confirmarse
+        
+        for (const cartItem of session.cart) {
+          // Si el item ya está confirmado, mantenerlo sin cambios
+          if (cartItem.confirmed) {
+            updatedCart.push(cartItem);
+            continue;
+          }
+          
+          // Buscar si este item pendiente está en la lista de items a confirmar
+          const matchIndex = itemsToConfirm.findIndex(orderedItem => 
             orderedItem.menuItemId === cartItem.menuItemId &&
-            cartItem.specialInstructions === orderedItem.specialInstructions
+            (cartItem.specialInstructions || '') === (orderedItem.specialInstructions || '')
           );
           
-          if (wasOrdered && !cartItem.confirmed) {
-            // Marcar como confirmado
-            return {
+          if (matchIndex >= 0) {
+            // Este item pendiente debe ser confirmado
+            updatedCart.push({
               ...cartItem,
               confirmed: true,
               orderId: order.id,
               confirmedAt: new Date(),
-            };
+            });
+            // Remover de la lista para evitar confirmar el mismo item múltiples veces
+            itemsToConfirm.splice(matchIndex, 1);
+          } else {
+            // Item pendiente que no está en esta confirmación
+            updatedCart.push(cartItem);
           }
-          
-          return cartItem;
-        });
+        }
 
         // Guardar el número de mesa en la sesión si es el primer pedido
         const updateData: { cart: CartItem[]; tableNumber?: number } = { cart: updatedCart };

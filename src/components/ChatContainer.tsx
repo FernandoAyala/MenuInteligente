@@ -279,9 +279,21 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         break;
 
       case 'RESTART_CHAT':
-        // Aquí podrías implementar lógica para reiniciar la sesión
+        // Limpiar carrito
         clearCart();
-        handleSendMessage('Hola, quisiera empezar de nuevo');
+        
+        // Limpiar mensajes del localStorage
+        if (sessionId) {
+          try {
+            localStorage.removeItem(`chat_messages_${sessionId}`);
+            console.log('🧹 Mensajes del chat limpiados del localStorage');
+          } catch (error) {
+            console.warn('No se pudo limpiar mensajes:', error);
+          }
+        }
+        
+        // Recargar la página para reiniciar completamente
+        window.location.reload();
         break;
 
       default:
@@ -415,9 +427,41 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   };
 
   const handleRequestBill = () => {
-    // Solo abrir el panel del carrito - NO enviar mensaje al chat
-    setIsCartOpen(true);
-    // El panel mostrará el total y los items confirmados visualmente
+    // Mostrar confirmación
+    const confirmed = window.confirm(
+      '¿Deseas solicitar la cuenta y finalizar la sesión?\n\n' +
+      'Se limpiará el historial del chat y el carrito.'
+    );
+    
+    if (!confirmed) {
+      return;
+    }
+    
+    // Limpiar todo el localStorage cuando se solicita la cuenta
+    try {
+      // Limpiar mensajes del chat
+      if (sessionId) {
+        localStorage.removeItem(`chat_messages_${sessionId}`);
+        console.log('🧹 Mensajes limpiados del localStorage al solicitar cuenta');
+      }
+      
+      // Limpiar carrito
+      localStorage.removeItem('shopping_cart');
+      console.log('🧹 Carrito limpiado del localStorage al solicitar cuenta');
+      
+      // Limpiar el carrito en el estado
+      clearCart();
+      
+      // Mostrar mensaje de éxito
+      alert('✅ Cuenta solicitada correctamente.\n\nGracias por tu visita!');
+      
+      // Recargar la página para reiniciar completamente la sesión
+      window.location.reload();
+      
+    } catch (error) {
+      console.warn('Error al limpiar localStorage:', error);
+      alert('Hubo un error al procesar la solicitud. Por favor intenta nuevamente.');
+    }
   };
 
   return (
