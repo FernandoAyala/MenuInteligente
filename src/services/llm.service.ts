@@ -20,6 +20,11 @@ export class LLMService {
   private currentProviderType: LLMProviderType;
   private readonly fallbackProviderType?: LLMProviderType;
   private readonly primaryProviderType: LLMProviderType;
+  private readonly breakerFailureThreshold: number;
+  private readonly breakerCooldownMs: number;
+  private primaryFailureCount = 0;
+  private circuitState: 'closed' | 'open' | 'half-open' = 'closed';
+  private nextPrimaryRetryTimestamp = 0;
 
   constructor(providerType?: LLMProviderType, fallbackProviderType?: LLMProviderType) {
     const resolvedPrimary =
@@ -37,6 +42,15 @@ export class LLMService {
 
     this.fallbackProviderType =
       resolvedFallback && resolvedFallback !== resolvedPrimary ? resolvedFallback : undefined;
+
+    this.breakerFailureThreshold = Math.max(
+      1,
+      config.llm?.breaker?.failureThreshold ?? 3
+    );
+    this.breakerCooldownMs = Math.max(
+      1000,
+      config.llm?.breaker?.cooldownMs ?? 60000
+    );
   }
 
   private resolveProviderFromConfig(
@@ -364,50 +378,134 @@ CONTEXTO DE LA CONVERSACIÓN:
   private async executeWithFallback<T>(
     action: (provider: ILLMProvider) => Promise<T>
   ): Promise<T> {
-    try {
-      return await action(this.provider);
-    } catch (primaryError) {
-      if (
-        !this.fallbackProviderType ||
-        this.currentProviderType === this.fallbackProviderType
-      ) {
+    if (!this.fallbackProviderType) {
+      return action(this.provider);
+    }
+
+    const canUsePrimary = this.shouldAttemptPrimary();
+
+    if (canUsePrimary) {
+      if (this.currentProviderType !== this.primaryProviderType) {
+        this.setProvider(this.primaryProviderType);
+      }
+
+      try {
+        const result = await action(this.provider);
+        this.resetCircuit();
+        return result;
+      } catch (primaryError) {
+        this.registerPrimaryFailure();
+
+        console.warn(
+          `[LLMService] Error con proveedor "${this.primaryProviderType}". Usando fallback "${this.fallbackProviderType}".`,
+          primaryError
+        );
+
+        return this.runWithFallback(action, primaryError);
+      }
+    }
+
+    return this.runWithFallback(action);
+  }
+
+  private shouldAttemptPrimary(): boolean {
+    if (!this.fallbackProviderType) {
+      return true;
+    }
+
+    if (this.circuitState === 'open') {
+      if (Date.now() >= this.nextPrimaryRetryTimestamp) {
+        this.circuitState = 'half-open';
+        console.info(
+          `[LLMService] Periodo de enfriamiento finalizado. Probando nuevamente con "${this.primaryProviderType}".`
+        );
+        return true;
+      }
+
+      return false;
+    }
+
+    return true;
+  }
+
+  private registerPrimaryFailure(): void {
+    this.primaryFailureCount = Math.min(
+      this.primaryFailureCount + 1,
+      this.breakerFailureThreshold
+    );
+
+    if (this.circuitState === 'half-open' || this.primaryFailureCount >= this.breakerFailureThreshold) {
+      this.openCircuit();
+    }
+  }
+
+  private openCircuit(): void {
+    if (!this.fallbackProviderType) {
+      return;
+    }
+
+    this.circuitState = 'open';
+    this.nextPrimaryRetryTimestamp = Date.now() + this.breakerCooldownMs;
+    this.primaryFailureCount = this.breakerFailureThreshold;
+
+    console.warn(
+      `[LLMService] Circuit breaker abierto para "${this.primaryProviderType}" durante ${this.breakerCooldownMs}ms.`
+    );
+
+    if (this.currentProviderType !== this.fallbackProviderType) {
+      this.setProvider(this.fallbackProviderType);
+    }
+  }
+
+  private resetCircuit(): void {
+    const wasOpen = this.circuitState !== 'closed' || this.primaryFailureCount !== 0;
+
+    this.primaryFailureCount = 0;
+    this.circuitState = 'closed';
+    this.nextPrimaryRetryTimestamp = 0;
+
+    if (wasOpen) {
+      console.info(
+        `[LLMService] Circuito restablecido. Proveedor "${this.primaryProviderType}" nuevamente operativo.`
+      );
+    }
+  }
+
+  private async runWithFallback<T>(
+    action: (provider: ILLMProvider) => Promise<T>,
+    primaryError?: unknown,
+  ): Promise<T> {
+    if (!this.fallbackProviderType) {
+      if (primaryError !== undefined) {
         throw primaryError;
       }
 
-      console.warn(
-        `[LLMService] Error con proveedor "${this.currentProviderType}" (primario: "${this.primaryProviderType}"). Intentando fallback "${this.fallbackProviderType}".`,
-        primaryError
+      return action(this.provider);
+    }
+
+    const previousType = this.currentProviderType;
+    const previousProvider = this.provider;
+
+    if (this.currentProviderType !== this.fallbackProviderType) {
+      this.setProvider(this.fallbackProviderType);
+    }
+
+    try {
+      return await action(this.provider);
+    } catch (fallbackError) {
+      this.provider = previousProvider;
+      this.currentProviderType = previousType;
+
+      console.error(
+        `[LLMService] Fallback "${this.fallbackProviderType}" falló al manejar la solicitud.`,
+        fallbackError
       );
 
-      const previousProvider = this.provider;
-      const previousType = this.currentProviderType;
-
-      try {
-        const fallbackProvider = LLMProviderFactory.getProvider(this.fallbackProviderType);
-        this.provider = fallbackProvider;
-        this.currentProviderType = this.fallbackProviderType;
-
-        return await action(this.provider);
-      } catch (fallbackError) {
-        this.provider = previousProvider;
-        this.currentProviderType = previousType;
-
-        console.error(
-          `[LLMService] Fallback "${this.fallbackProviderType}" también falló. Restableciendo proveedor "${previousType}".`,
-          fallbackError
-        );
-
-        if (fallbackError instanceof Error) {
-          (fallbackError as Error & { primaryError?: unknown }).primaryError = primaryError;
-          throw fallbackError;
-        }
-
-        const wrappedError = new Error(
-          `Fallback provider "${this.fallbackProviderType}" failed after primary "${previousType}" error: ${String(fallbackError)}`
-        );
-        (wrappedError as Error & { primaryError?: unknown }).primaryError = primaryError;
-        throw wrappedError;
+      if (fallbackError instanceof Error && primaryError !== undefined) {
+        (fallbackError as Error & { primaryError?: unknown }).primaryError = primaryError;
       }
+
+      throw fallbackError;
     }
   }
 

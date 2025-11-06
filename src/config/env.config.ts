@@ -3,6 +3,15 @@ import dotenv from 'dotenv';
 // Cargar variables de entorno
 dotenv.config();
 
+const parseNumberFromEnv = (value: string | undefined, fallback: number): number => {
+  if (value === undefined || value.trim() === '') {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
 /**
  * Configuración centralizada de variables de entorno
  */
@@ -27,6 +36,10 @@ export const config = {
   llm: {
     defaultProvider: process.env.LLM_DEFAULT_PROVIDER || 'openai',
     fallbackProvider: process.env.LLM_FALLBACK_PROVIDER,
+    breaker: {
+      failureThreshold: Math.max(1, parseNumberFromEnv(process.env.LLM_BREAKER_FAILURE_THRESHOLD, 3)),
+      cooldownMs: Math.max(1000, parseNumberFromEnv(process.env.LLM_BREAKER_COOLDOWN_MS, 60000)),
+    },
   },
   
   allowedOrigins: process.env.ALLOWED_ORIGINS 
