@@ -368,7 +368,8 @@ export class ChatController {
                 isVegetarian: dish.isVegetarian,
                 isGlutenFree: dish.isGlutenFree,
                 allergens: dish.allergens,
-                available: dish.available
+                available: dish.available,
+                imageUrl: dish.imageUrl
               },
               score: 100, // Score máximo porque es solicitud directa
               rank: index + 1,

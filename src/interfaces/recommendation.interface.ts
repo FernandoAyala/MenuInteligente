@@ -100,6 +100,7 @@ export interface Recommendation {
     isGlutenFree: boolean;
     allergens: string[];
     available: boolean;
+    imageUrl?: string;
   };
   
   /** Score total de relevancia (0-100) */

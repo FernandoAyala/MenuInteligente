@@ -1,5 +1,5 @@
 import { getFirestore } from '../config/firebase.config';
-import { MenuItem, CreateMenuItemDto, UpdateMenuItemDto } from '../models/menuItem.model';
+import { CreateMenuItemDto, MenuItem, UpdateMenuItemDto } from '../models/menuItem.model';
 
 const COLLECTION_NAME = 'menuItems';
 
@@ -135,6 +135,7 @@ export class MenuItemRepository {
       allergens: data.allergens || [],
       tags: data.tags || [],
       available: data.available,
+      imageUrl: data.imageUrl,
       createdAt,
     };
   }

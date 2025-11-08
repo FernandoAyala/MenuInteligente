@@ -13,18 +13,18 @@
  * 6. Mantiene logs de auditoría (Task #40)
  */
 
+import { LLMProviderType } from '../interfaces/llm.interface';
 import {
-  RecommendationParams,
-  Recommendation,
-  SafetyFilterResult,
-  RejectedDish,
-  SafetyCheck,
-  ScoreBreakdown,
-  RecommendationServiceConfig,
-  RankingResult,
+    RankingResult,
+    Recommendation,
+    RecommendationParams,
+    RecommendationServiceConfig,
+    RejectedDish,
+    SafetyCheck,
+    SafetyFilterResult,
+    ScoreBreakdown,
 } from '../interfaces/recommendation.interface';
 import { MenuItemRepository } from '../repositories/menuItem.repository';
-import { LLMProviderType } from '../interfaces/llm.interface';
 import { RecommendationLogger } from '../utils/recommendation-logger';
 
 /**
@@ -662,6 +662,7 @@ export class RecommendationService {
           isGlutenFree: item.dish.isGlutenFree,
           allergens: item.dish.allergens || [], // Asegurar que siempre sea un array
           available: item.dish.available,
+          imageUrl: item.dish.imageUrl,
         },
         score: item.totalScore,
         scoreBreakdown: item.scoreBreakdown,
