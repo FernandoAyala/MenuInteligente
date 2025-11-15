@@ -1,6 +1,8 @@
 /**
  * Epic #60: API Conversacional y Orquestación
  * Task #66: Middleware de Manejo de Errores
+ * User Story #74: Experiencia fluida y confiable sin errores técnicos
+ * Task #77: Manejo de errores y recuperación
  * 
  * Sistema de manejo centralizado de errores con clases personalizadas
  * y respuestas estructuradas para el cliente.
@@ -11,12 +13,14 @@
  * - Logging automático de errores
  * - Respuestas HTTP apropiadas
  * - Sanitización de errores en producción
+ * - Mensajes amigables para el usuario
+ * - Recuperación automática cuando es posible
  */
 
-import { Request, Response, NextFunction } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { ZodError } from 'zod';
-import { logger } from '../utils/logger';
 import { ChatErrorCode } from '../interfaces/chat.interface';
+import { logger } from '../utils/logger';
 
 /**
  * Clase base para errores del sistema de chat
@@ -261,6 +265,7 @@ interface ErrorResponse {
   error: {
     code: string;
     message: string;
+    userMessage?: string; // Mensaje amigable para mostrar al usuario
     details?: Record<string, unknown>;
     stack?: string;
   };
@@ -357,6 +362,7 @@ export const errorHandler = (
     error: {
       code: errorCode,
       message,
+      userMessage: getUserFriendlyMessage(err), // Mensaje amigable para el usuario
       details
     },
     timestamp: new Date().toISOString(),
@@ -462,4 +468,46 @@ export function assert(
   if (!condition) {
     throw new ChatError(errorMessage, 400, errorCode);
   }
+}
+
+/**
+ * Genera mensajes de error amigables para el usuario
+ * Task #77: Mensajes de error graceful
+ */
+export function getUserFriendlyMessage(error: unknown): string {
+  if (error instanceof LLMTimeoutError) {
+    return '⏱️ Estoy pensando un poco más de lo normal. ¿Podés intentar de nuevo?';
+  }
+
+  if (error instanceof LLMError) {
+    return '🤔 Tuve un pequeño problema procesando tu mensaje. ¿Probamos de nuevo?';
+  }
+
+  if (error instanceof DatabaseError) {
+    return '💾 Hay un problemita con mi memoria. Dame un segundo e intentá de nuevo.';
+  }
+
+  if (error instanceof SessionNotFoundError) {
+    return '📝 No encontré nuestra conversación anterior. ¿Empezamos de nuevo?';
+  }
+
+  if (error instanceof RateLimitError) {
+    return '🚦 Muchas consultas al mismo tiempo. Esperá unos segundos, por favor.';
+  }
+
+  if (error instanceof ValidationError) {
+    const err = error as ValidationError;
+    return err.message || '❌ Algo no está bien con lo que me enviaste. ¿Podés revisarlo?';
+  }
+
+  if (error instanceof ServiceUnavailableError) {
+    return '🔧 Estoy teniendo problemas técnicos temporales. Intentá de nuevo en un momento.';
+  }
+
+  if (error instanceof TimeoutError) {
+    return '⏱️ La operación está tardando más de lo esperado. ¿Probamos de nuevo?';
+  }
+
+  // Error genérico
+  return '😔 Ups, algo salió mal. Pero no te preocupes, podés intentar de nuevo.';
 }

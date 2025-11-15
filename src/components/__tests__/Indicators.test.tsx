@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import ConnectionStatusIndicator from '../components/ConnectionStatusIndicator';
-import TypingIndicator from '../components/TypingIndicator';
+import ConnectionStatusIndicator from '../ConnectionStatusIndicator';
+import TypingIndicator from '../TypingIndicator';
 
 describe('TypingIndicator Component', () => {
   it('renders typing indicator with correct text', () => {

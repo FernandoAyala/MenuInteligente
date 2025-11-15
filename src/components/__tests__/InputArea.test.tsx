@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import InputArea from '../components/InputArea';
+import InputArea from '../InputArea';
 
 const createWrapper = () => {
   const queryClient = new QueryClient({

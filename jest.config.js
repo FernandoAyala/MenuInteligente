@@ -35,6 +35,7 @@ module.exports = {
       testMatch: [
         '<rootDir>/src/**/__tests__/**/*.ts',
         '<rootDir>/src/**/?(*.)(spec|test).ts',
+        '<rootDir>/src/tests/**/*.ts',
         '<rootDir>/tests/**/*.ts',
       ],
       transform: {

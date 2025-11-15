@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import MessageBubble from '../components/MessageBubble';
-import { ChatMessage, MenuItem } from '../types';
+import { ChatMessage, MenuItem } from '../../types';
+import MessageBubble from '../MessageBubble';
 
 const createWrapper = () => {
   const queryClient = new QueryClient({

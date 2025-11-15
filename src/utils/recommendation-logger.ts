@@ -8,11 +8,11 @@
  */
 
 import {
-  RecommendationParams,
-  SafetyFilterResult,
-  Recommendation,
-  RecommendationLog,
-  ScoreBreakdown,
+    Recommendation,
+    RecommendationLog,
+    RecommendationParams,
+    SafetyFilterResult,
+    ScoreBreakdown,
 } from '../interfaces/recommendation.interface';
 
 /**
@@ -82,7 +82,6 @@ export class RecommendationLogger {
             dietary: s.scoreBreakdown.dietaryMatch,
             budget: s.scoreBreakdown.budgetFit,
             preferences: s.scoreBreakdown.preferencesMatch,
-            semantic: s.scoreBreakdown.semanticScore,
           },
         })),
     });

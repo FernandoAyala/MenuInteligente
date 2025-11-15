@@ -1,18 +1,22 @@
+import { config } from '../config/env.config';
 import { ILLMProvider, LLMMessage, LLMProviderType, MessageRole } from '../interfaces/llm.interface';
 import {
-    GenerationPrompts,
-    formatOrderSummary,
+  GenerationPrompts,
+  formatOrderSummary,
 } from '../prompts/generation.prompts';
 import {
-    IntentExtractionResult,
-    NLUPrompts
+  INTENT_EXTRACTION_PROMPT,
+  IntentExtractionResult,
 } from '../prompts/nlu.prompts';
 import { LLMProviderFactory } from '../providers/llm.factory';
-import { config } from '../config/env.config';
+import { performanceProfiler } from './performance.service'; // US#74 Task#78
 
 /**
  * Servicio avanzado de LLM con capacidades mejoradas de NLU
  * Epic #21: Integración LLM y Procesamiento de Lenguaje Natural
+ * User Story #74: Experiencia fluida y confiable sin errores técnicos
+ * Task #77: Manejo de errores y recuperación
+ * 
  * Implementa Tasks #25, #26, #27, #29, #30, #31, #32
  */
 export class LLMService {
@@ -118,29 +122,35 @@ export class LLMService {
    * Usa el prompt especializado de NLU
    */
   async extractDetailedIntents(userMessage: string): Promise<IntentExtractionResult> {
-    const systemPrompt: LLMMessage = {
-      role: MessageRole.SYSTEM,
-      content: NLUPrompts.intentExtraction,
-    };
+    return performanceProfiler.trackAsync(
+      'llm.extractIntents',
+      async () => {
+        const systemPrompt: LLMMessage = {
+          role: MessageRole.SYSTEM,
+          content: INTENT_EXTRACTION_PROMPT,
+        };
 
-    const userPrompt: LLMMessage = {
-      role: MessageRole.USER,
-      content: userMessage,
-    };
+        const userPrompt: LLMMessage = {
+          role: MessageRole.USER,
+          content: userMessage,
+        };
 
-    try {
-      const response = await this.executeWithFallback((provider: ILLMProvider) =>
-        provider.generateResponse([systemPrompt, userPrompt], {
-          temperature: 0.3,
-          maxTokens: 800,
-        })
-      );
+        try {
+          const response = await this.executeWithFallback((provider: ILLMProvider) =>
+            provider.generateResponse([systemPrompt, userPrompt], {
+              temperature: 0.3,
+              maxTokens: 800,
+            })
+          );
 
-      return this.parseStructuredResponse<IntentExtractionResult>(response.content);
-    } catch (error) {
-      console.error('Error extracting intents:', error);
-      return this.getDefaultIntentResult();
-    }
+          return this.parseStructuredResponse<IntentExtractionResult>(response.content);
+        } catch (error) {
+          console.error('Error extracting intents:', error);
+          return this.getDefaultIntentResult();
+        }
+      },
+      { messageLength: userMessage.length }
+    );
   }
 
   // ============================================================================

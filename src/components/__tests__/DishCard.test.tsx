@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
-import DishCard from '../components/DishCard';
-import { MenuItem } from '../types';
+import { MenuItem } from '../../types';
+import DishCard from '../DishCard';
 
 // Mock de datos para testing
 const mockMenuItem: MenuItem = {

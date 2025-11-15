@@ -35,6 +35,7 @@ initializeFirebase();
 // Importar rutas
 import analyticsRoutes from './routes/analytics.routes';
 import chatRoutes from './routes/chat.routes';
+import healthRoutes from './routes/health.routes'; // US#74 Task#79: Monitoring
 import llmRoutes from './routes/llm.routes';
 import menuItemRoutes from './routes/menuItem.routes';
 import ordersRoutes from './routes/orders.routes';
@@ -44,15 +45,6 @@ import sessionRoutes from './routes/session.routes';
 // Importar middleware de error handling
 import { errorHandler, notFoundHandler } from './middleware/error-handler.middleware';
 
-// Health check endpoint
-app.get('/health', (_req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    service: 'Menu Inteligente API' 
-  });
-});
-
 // Root endpoint - información de la API
 app.get('/', (_req, res) => {
   res.status(200).json({
@@ -61,6 +53,9 @@ app.get('/', (_req, res) => {
     environment: config.nodeEnv,
     endpoints: {
       health: '/health',
+      healthDetailed: '/health/detailed',
+      metrics: '/metrics',
+      metricsPerformance: '/metrics/performance',
       chat: '/api/chat',
       llm: '/api/llm',
       recommendations: '/api/recommendations',
@@ -83,6 +78,8 @@ app.use('/api/recommendations', recommendationsRoutes);
 app.use('/api/orders', ordersRoutes); // Gestión de comandas/pedidos
 app.use('/api/sessions', sessionRoutes); // Gestión de sesiones
 app.use('/api/menu-items', menuItemRoutes); // Items del menú
+app.use('/health', healthRoutes); // US#74 Task#79: Health checks y métricas
+app.use('/metrics', healthRoutes); // US#74 Task#79: Métricas de performance
 
 // Servir archivos estáticos del frontend (PRODUCCIÓN)
 // En producción, el frontend compilado estará en /dist-frontend

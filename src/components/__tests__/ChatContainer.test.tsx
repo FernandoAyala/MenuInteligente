@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import ChatContainer from '../components/ChatContainer';
+import ChatContainer from '../ChatContainer';
 
 const createWrapper = () => {
   const queryClient = new QueryClient({

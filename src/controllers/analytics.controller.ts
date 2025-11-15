@@ -46,7 +46,7 @@ export class AnalyticsController {
       const menuItemsMap = new Map(allMenuItems.map(item => [item.id, item]));
 
       // 3. Calcular estadísticas básicas
-      const stats = this.calculateStatistics(orders, menuItemsMap);
+      const stats = this.calculateStatistics(orders);
       
       // Log para debug
       logger.info('[AnalyticsController] Estadísticas calculadas:', { 
@@ -127,7 +127,7 @@ Responde ahora:`;
   /**
    * Calcula estadísticas generales de las órdenes
    */
-  private calculateStatistics(orders: any[], menuItemsMap: Map<string, any>) {
+  private calculateStatistics(orders: any[]) {
     const stats: any = {
       totalOrders: orders.length,
       totalRevenue: 0,
@@ -315,26 +315,24 @@ ${specialInstructionsInfo}
   /**
    * Exporta un reporte de análisis a Excel con las preguntas sugeridas
    */
-  public async exportToExcel(req: Request, res: Response): Promise<void> {
+  public async exportToExcel(_req: Request, res: Response): Promise<void> {
     try {
       const ExcelJS = require('exceljs');
       
       // 1. Obtener datos
       const orders = await this.orderRepository.findAll();
-      const allMenuItems = await this.menuItemRepository.findAllAvailable();
-      const menuItemsMap = new Map(allMenuItems.map(item => [item.id, item]));
-      const stats = this.calculateStatistics(orders, menuItemsMap);
+      const stats = this.calculateStatistics(orders);
 
       // 2. Crear workbook y worksheet
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Análisis de Ventas');
 
-      // 3. Configurar estilos
-      const headerStyle = {
-        font: { bold: true, size: 12, color: { argb: 'FFFFFFFF' } },
-        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } },
-        alignment: { vertical: 'middle', horizontal: 'left' },
-      };
+      // 3. Configurar estilos (se usan más adelante en el código)
+      // const headerStyle = {
+      //   font: { bold: true, size: 12, color: { argb: 'FFFFFFFF' } },
+      //   fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F46E5' } },
+      //   alignment: { vertical: 'middle', horizontal: 'left' },
+      // };
 
       const questionStyle = {
         font: { bold: true, size: 11, color: { argb: 'FF1F2937' } },
@@ -404,10 +402,11 @@ ${specialInstructionsInfo}
       const ordersWithTiming = orders.filter(order => order.startedAt && (order.servedAt || order.readyAt));
       const avgPrepTime = ordersWithTiming.length > 0
         ? ordersWithTiming.reduce((sum, order) => {
+            if (!order.startedAt) return sum;
             const startTime = new Date(order.startedAt).getTime();
             const endTime = order.servedAt 
               ? new Date(order.servedAt).getTime() 
-              : new Date(order.readyAt).getTime();
+              : (order.readyAt ? new Date(order.readyAt).getTime() : startTime);
             return sum + (endTime - startTime) / 1000 / 60;
           }, 0) / ordersWithTiming.length
         : 0;
@@ -427,7 +426,7 @@ ${specialInstructionsInfo}
       // 9. Pregunta 4: ¿Qué platos tienen más instrucciones especiales?
       const instructionsMap = new Map<string, number>();
       orders.forEach(order => {
-        const dishesArray = order.dishes || order.items || [];
+        const dishesArray = order.dishes || [];
         if (Array.isArray(dishesArray)) {
           dishesArray.forEach((dish: any) => {
             if (dish.specialInstructions && dish.specialInstructions.trim()) {

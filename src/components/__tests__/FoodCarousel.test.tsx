@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import FoodCarousel from '../components/FoodCarousel';
-import { MenuItem } from '../types';
+import { MenuItem } from '../../types';
+import FoodCarousel from '../FoodCarousel';
 
 const mockMenuItems: MenuItem[] = [
   {

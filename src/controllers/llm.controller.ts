@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { LLMService } from '../services/llm.service';
 import { LLMProviderType } from '../interfaces/llm.interface';
+import { LLMService } from '../services/llm.service';
 
 /**
  * Controlador para manejar endpoints relacionados con LLM y configuración
@@ -77,9 +77,8 @@ export class LLMController {
       const testMessage = message || '¿Estás funcionando correctamente?';
 
       const startTime = Date.now();
-      const response = await llmService.generateConversationalResponse(
-        testMessage,
-        {}
+      const response = await llmService.generateTextResponse(
+        testMessage
       );
       const latency = Date.now() - startTime;
 
