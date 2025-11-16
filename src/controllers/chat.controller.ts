@@ -936,7 +936,7 @@ export class ChatController {
     if (actionTypes.includes(ChatActionType.REQUEST_RECOMMENDATION) || actionTypes.includes(ChatActionType.VIEW_MENU)) {
       if (hasRecommendations) {
         const count = recommendations.length;
-        return `¡Perfecto! Te recomiendo ${count === 1 ? 'este plato' : `estos ${count} platos`} basándome en tus preferencias. ¿Te gusta alguno?`;
+        return `¡Perfecto! Te recomiendo ${count === 1 ? 'está opción' : `estas ${count} opciones`} basándome en tus preferencias. ¿Te gusta alguno?`;
       }
       
       // No hay recomendaciones, pedir más información

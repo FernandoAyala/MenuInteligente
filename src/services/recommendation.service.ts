@@ -42,8 +42,8 @@ const DEFAULT_CONFIG: RecommendationServiceConfig = {
     preferencesMatch: 0.30,   // 30% peso (aumentado desde 20%)
     availability: 0.20,       // 20% peso (aumentado desde 15%)
   },
-  ensureDiversity: true,
-  categoryRepetitionPenalty: 0.3,
+  ensureDiversity: false,
+  categoryRepetitionPenalty: 0,
 };
 
 /**
