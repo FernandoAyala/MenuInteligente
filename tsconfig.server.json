@@ -51,7 +51,6 @@
     "src/styles",
     "src/App.tsx",
     "src/main.tsx",
-    "src/types",
     "src/mocks",
     "src/examples",
     "src/services/api",
