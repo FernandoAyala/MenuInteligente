@@ -44,7 +44,11 @@ const corsOptions = {
 
 // Configuración de Socket.io con soporte para múltiples frontends
 const io = new Server(httpServer, {
-  cors: corsOptions,
+  cors: {
+    origin: corsOptions.origin,
+    methods: corsOptions.methods,
+    credentials: corsOptions.credentials,
+  },
 });
 
 // Middleware de CORS
