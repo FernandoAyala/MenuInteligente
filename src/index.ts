@@ -162,10 +162,19 @@ io.on('connection', (socket) => {
 
 // Iniciar servidor
 const PORT = config.port;
+
+httpServer.on('error', (error: Error & { code?: string }) => {
+  console.error('❌ Error en el servidor HTTP:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Puerto ${PORT} ya está en uso`);
+  }
+});
+
 httpServer.listen(PORT, () => {
   console.log(`🚀 Servidor ejecutándose en puerto ${PORT}`);
   console.log(`📡 Entorno: ${config.nodeEnv}`);
   console.log(`🔥 Firebase proyecto: ${config.firebase.projectId}`);
+  console.log(`🌐 Healthcheck disponible en: http://localhost:${PORT}/health`);
 });
 
 // Manejo de errores no capturados
