@@ -11,22 +11,44 @@ import { initializeFirebase } from './config/firebase.config';
 const app: Application = express();
 const httpServer = createServer(app);
 
-// Configuración de Socket.io con soporte para múltiples frontends
-const io = new Server(httpServer, {
-  cors: {
-    origin: config.allowedOrigins, // Incluye puertos 5173 y 5174
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    credentials: true,
+// Configuración de CORS - permitir Firebase Hosting
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Permitir requests sin origin (como mobile apps o curl)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Verificar si el origen está en la lista de permitidos
+    const allowedOrigins = config.allowedOrigins;
+    const isAllowed = allowedOrigins.some(allowed => {
+      // Permitir exactamente o con wildcard
+      if (allowed === '*') return true;
+      if (origin === allowed) return true;
+      // Permitir subdominios de Firebase
+      if (origin.includes('.web.app') || origin.includes('.firebaseapp.com')) return true;
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(null, false);
+    }
   },
-});
-
-// Middleware de CORS más permisivo para desarrollo
-app.use(cors({ 
-  origin: config.allowedOrigins, // Incluye puertos 5173 y 5174
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-}));
+};
+
+// Configuración de Socket.io con soporte para múltiples frontends
+const io = new Server(httpServer, {
+  cors: corsOptions,
+});
+
+// Middleware de CORS
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
