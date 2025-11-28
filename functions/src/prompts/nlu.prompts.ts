@@ -126,7 +126,8 @@ Identifica la intención principal usando EXACTAMENTE uno de estos valores:
 * REGLAS CRÍTICAS PARA INTENCIONES:
   - Si dice "Hola" + ALGO MÁS → NO es "saludo", usa la intención de lo que pide
   - Si menciona plato específico + restricción → "recomendar" o "agregar_al_pedido"
-  - Si pregunta por categoría general → "consultar_menu"
+  - Si PREGUNTA "¿qué tienen de..." o "mostrame el menú de..." → "consultar_menu"
+  - Si PIDE/QUIERE categoría ("quiero bebidas", "dame postres", "busco entradas") → "recomendar" (extraer mealType)
   - Si pide sugerencias → SIEMPRE "recomendar"
 
 2. EXTRACCIÓN DE ENTIDADES (CRÍTICO)

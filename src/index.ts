@@ -11,31 +11,30 @@ import { initializeFirebase } from './config/firebase.config';
 const app: Application = express();
 const httpServer = createServer(app);
 
-// Configuración de CORS - permitir Firebase Hosting
+// Función para validar origen CORS
+const validateOrigin = (origin: string | undefined): boolean => {
+  if (!origin) return true; // Permitir requests sin origin (mobile apps, curl)
+  
+  const allowedOrigins = config.allowedOrigins;
+  
+  // Verificar lista de orígenes permitidos
+  if (allowedOrigins.some(allowed => allowed === '*' || origin === allowed)) {
+    return true;
+  }
+  
+  // Permitir automáticamente dominios de Firebase Hosting
+  if (origin.includes('.web.app') || origin.includes('.firebaseapp.com')) {
+    return true;
+  }
+  
+  console.warn(`CORS blocked origin: ${origin}`);
+  return false;
+};
+
+// Configuración de CORS para Express
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Permitir requests sin origin (como mobile apps o curl)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Verificar si el origen está en la lista de permitidos
-    const allowedOrigins = config.allowedOrigins;
-    const isAllowed = allowedOrigins.some(allowed => {
-      // Permitir exactamente o con wildcard
-      if (allowed === '*') return true;
-      if (origin === allowed) return true;
-      // Permitir subdominios de Firebase
-      if (origin.includes('.web.app') || origin.includes('.firebaseapp.com')) return true;
-      return false;
-    });
-    
-    if (isAllowed) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS blocked origin: ${origin}`);
-      callback(null, false);
-    }
+    callback(null, validateOrigin(origin));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -45,9 +44,9 @@ const corsOptions = {
 // Configuración de Socket.io con soporte para múltiples frontends
 const io = new Server(httpServer, {
   cors: {
-    origin: corsOptions.origin,
-    methods: corsOptions.methods,
-    credentials: corsOptions.credentials,
+    origin: validateOrigin,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    credentials: true,
   },
 });
 
