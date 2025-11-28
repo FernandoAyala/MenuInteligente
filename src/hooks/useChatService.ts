@@ -146,6 +146,9 @@ export function useChatService(options: UseChatServiceOptions = {}) {
       ? Boolean(response.autoAddedToCart) 
       : undefined;
     
+    // Extraer actions del response
+    const actions = 'actions' in response ? response.actions : undefined;
+    
     return {
       id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       content,
@@ -154,6 +157,7 @@ export function useChatService(options: UseChatServiceOptions = {}) {
       status: 'sent',
       menuItems,
       autoAddedToCart,
+      actions,
     };
   }, []);
 

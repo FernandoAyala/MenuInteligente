@@ -566,7 +566,8 @@ export class ChatController {
         actions, 
         recommendations,
         updatedSlots,
-        autoAddedToCart // Pasar info de si se agregó automáticamente
+        autoAddedToCart, // Pasar info de si se agregó automáticamente
+        session.id // Pasar sessionId para generar resumen del carrito
       );
 
       // Si se creó un pedido, modificar el mensaje para incluir el ID
@@ -870,7 +871,8 @@ export class ChatController {
     actions: ChatAction[],
     recommendations?: any[],
     slots?: ConversationSlots,
-    autoAddedToCart?: boolean
+    autoAddedToCart?: boolean,
+    sessionId?: string
   ): Promise<string> {
     const hasRecommendations = recommendations && recommendations.length > 0;
     const actionTypes = actions.map(a => a.type);
@@ -1279,9 +1281,52 @@ NO inventes ingredientes que no estén en la descripción original. Si la descri
       return '¿Estás seguro de que deseas cancelar tu pedido? Si hay algún problema, puedo ayudarte a modificarlo en lugar de cancelarlo.';
     }
 
-    // 12. CONFIRMAR PEDIDO
+    // 12. CONFIRMAR PEDIDO - Mostrar resumen del carrito
     if (actionTypes.includes(ChatActionType.CONFIRM_ORDER)) {
-      return '¡Perfecto! Voy a confirmar tu pedido. Una vez confirmado, comenzaremos a prepararlo. ¿Todo está correcto?';
+      try {
+        // Obtener el carrito de la sesión
+        if (!sessionId) {
+          return '¿Confirmas tu pedido actual?';
+        }
+        
+        const session = await this.sessionRepository.findById(sessionId);
+        
+        if (!session || !session.cart || session.cart.length === 0) {
+          return 'Tu carrito está vacío. Primero agrega algunos platos para poder confirmar tu pedido.';
+        }
+
+        // Filtrar solo items pendientes (no confirmados)
+        const pendingItems = session.cart.filter((item: { confirmed?: boolean }) => !item.confirmed);
+        
+        if (pendingItems.length === 0) {
+          return 'No tienes items pendientes de confirmar. ¿Deseas agregar algo más a tu pedido?';
+        }
+
+        // Construir resumen del carrito
+        let summary = '📋 *Tu pedido:*\n\n';
+        let total = 0;
+
+        for (const item of pendingItems) {
+          const menuItem = await this.menuItemRepository.findById(item.menuItemId);
+          if (menuItem) {
+            const itemTotal = menuItem.price * item.quantity;
+            total += itemTotal;
+            summary += `• ${menuItem.name} x${item.quantity} - $${itemTotal.toLocaleString()}\n`;
+            
+            if (item.specialInstructions) {
+              summary += `  _${item.specialInstructions}_\n`;
+            }
+          }
+        }
+
+        summary += `\n*Total: $${total.toLocaleString()}*\n\n`;
+        summary += '¿Confirmas tu pedido?';
+
+        return summary;
+      } catch (error) {
+        logger.error('Error generando resumen del carrito', { error });
+        return '¿Confirmas tu pedido actual?';
+      }
     }
 
     // 13. RESPUESTA POR DEFECTO
@@ -1375,7 +1420,7 @@ NO inventes ingredientes que no estén en la descripción original. Si la descri
     }
 
     if (primaryIntent === 'confirmar_pedido') {
-      actions.push(createChatAction(ChatActionType.PLACE_ORDER, 'Realizar pedido'));
+      actions.push(createChatAction(ChatActionType.CONFIRM_ORDER, 'Solicitar confirmación'));
     }
     
     // NOTA: "solicitar_cuenta" NO genera acción - se maneja solo visualmente en el frontend

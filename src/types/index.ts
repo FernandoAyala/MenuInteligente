@@ -33,6 +33,14 @@ export interface ChatMessage {
   menuItems?: MenuItem[]; // Para recomendaciones de platos
   isTyping?: boolean;
   autoAddedToCart?: boolean; // Indica si los items fueron agregados automáticamente
+  actions?: ChatAction[]; // Acciones disponibles para el mensaje
+}
+
+// Tipos para acciones del chat
+export interface ChatAction {
+  type: string;
+  label: string;
+  data?: any;
 }
 
 // Tipos para las sesiones de conversación

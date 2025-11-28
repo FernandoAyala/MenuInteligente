@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import muzziniAvatar from '../chefcito.jpg';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { ChatMessage, MenuItem } from '../types';
+import ConfirmOrderButton from './ConfirmOrderButton';
 import FoodCarousel from './FoodCarousel';
 import { VoiceOutputButton } from './VoiceOutputButton';
 
@@ -31,27 +32,29 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   // Auto-reproducir voz para mensajes del bot
   useEffect(() => {
-    if (autoSpeak && !isOwn && message.content) {
-      console.log('🎤 Iniciando auto-speak para mensaje:', message.id);
-      
-      // Limpiar texto de emojis y caracteres especiales
-      const cleanText = message.content
-        .replace(/[🍕🍝🍗🍖🥗🍲🍛🥘🍜🍱🍙🍚🍘🥟🍤🍣🍡🧆🥙🌮🌯🥪🍔🍟🌭🥓🥞🧇]/g, '')
-        .replace(/[$]/g, 'pesos')
-        .replace(/[📍⭐💫🎉🛒]/g, '')
-        .trim();
-      
-      // Esperar un momento para que el mensaje se renderice
-      const timer = setTimeout(() => {
-        if (cleanText.length > 0) {
-          console.log('🔊 Auto-reproduciendo:', cleanText);
-          speak(cleanText);
-          onAutoSpeakTriggered?.();
-        }
-      }, 500);
-      
-      return () => clearTimeout(timer);
+    if (!autoSpeak || isOwn || !message.content) {
+      return;
     }
+
+    console.log('🎤 Iniciando auto-speak para mensaje:', message.id);
+    
+    // Limpiar texto de emojis y caracteres especiales
+    const cleanText = message.content
+      .replace(/[🍕🍝🍗🍖🥗🍲🍛🥘🍜🍱🍙🍚🍘🥟🍤🍣🍡🧆🥙🌮🌯🥪🍔🍟🌭🥓🥞🧇]/g, '')
+      .replace(/[$]/g, 'pesos')
+      .replace(/[📍⭐💫🎉🛒]/g, '')
+      .trim();
+    
+    // Esperar un momento para que el mensaje se renderice
+    const timer = setTimeout(() => {
+      if (cleanText.length > 0) {
+        console.log('🔊 Auto-reproduciendo:', cleanText);
+        speak(cleanText);
+        onAutoSpeakTriggered?.();
+      }
+    }, 500);
+    
+    return () => clearTimeout(timer);
   }, [autoSpeak, isOwn, message.content, message.id, speak, onAutoSpeakTriggered]);
 
   const formatTime = (date: Date) => {
@@ -127,6 +130,29 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               variant="chat"
               confirmationOnly={message.autoAddedToCart}
             />
+          </div>
+        )}
+
+        {/* Botón de confirmar pedido */}
+        {message.actions && message.actions.length > 0 && !isOwn && (
+          <div className="w-full max-w-md mt-2">
+            {message.actions.map((action, index) => {
+              if (action.type === 'confirm_order') {
+                return (
+                  <ConfirmOrderButton
+                    key={`action-${index}`}
+                    action={action}
+                    onClick={(confirmedAction) => {
+                      // Llamar al handler global
+                      if ((window as any).handleConfirmOrderAction) {
+                        (window as any).handleConfirmOrderAction(confirmedAction);
+                      }
+                    }}
+                  />
+                );
+              }
+              return null;
+            })}
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import chefcitoAvatar from '../chefcito.jpg';
 import { useChatService } from '../hooks/useChatService';
 import { useShoppingCart } from '../hooks/useWebSocket';
-import { MenuItem } from '../types';
+import { ChatAction, MenuItem } from '../types';
 import { CartPanel } from './CartPanel';
 import ConnectionStatusIndicator from './ConnectionStatusIndicator';
 import InputArea from './InputArea';
@@ -137,54 +137,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return;
 
-    // Detectar intención de confirmar pedido en el texto
-    const lowerContent = content.toLowerCase().trim();
-    const confirmPatterns = [
-      'confirmar pedido',
-      'confirmar el pedido', 
-      'confirmar mi pedido',
-      'hacer el pedido',
-      'hacer pedido',
-      'finalizar pedido',
-      'finalizar el pedido',
-      'proceder al pago',
-      'quiero pagar',
-      'enviar a cocina',
-      'enviar el pedido'
-    ];
-
-    const isConfirmIntent = confirmPatterns.some(pattern => lowerContent.includes(pattern));
-
-    if (isConfirmIntent) {
-      // Si tiene items en el carrito, confirmar
-      if (getTotalItems() > 0) {
-        setIsCartOpen(true);
-        const currentCartItems = cartItems.map(item => ({
-          menuItemId: item.menuItem.id,
-          menuItem: item.menuItem,
-          quantity: item.quantity,
-          specialInstructions: item.specialInstructions || '',
-        }));
-        
-        // Enviar el mensaje al chat para que el agente IA confirme
-        setIsTyping(true);
-        await sendChatMessage(content);
-        
-        // Ejecutar la confirmación real del pedido
-        setTimeout(() => {
-          handleConfirmOrder(currentCartItems);
-        }, 800);
-        
-        return;
-      } else {
-        // Si no hay items, enviar al agente IA para que responda
-        setIsTyping(true);
-        await sendChatMessage(content);
-        return;
-      }
-    }
-
-    // Flujo normal para otros mensajes
+    // Flujo normal para todos los mensajes (incluido confirmar pedido)
     setIsTyping(true);
 
     try {
@@ -344,6 +297,26 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
       setCartCounter(prev => Math.max(prev, total)); // Usar el máximo para no sobrescribir el backend
     }
   }, [cartItems, getTotalItems]);
+
+  const handleMessageAction = (action: ChatAction) => {
+    console.log('🎯 Acción ejecutada:', action);
+    
+    // Manejar acción de confirmar pedido
+    if (action.type === 'confirm_order') {
+      // Abrir el modal del carrito para que el usuario revise y confirme manualmente
+      setIsCartOpen(true);
+    }
+    
+    // Aquí se pueden agregar más tipos de acciones en el futuro
+  };
+
+  // Exponer handleMessageAction globalmente para ConfirmOrderButton
+  useEffect(() => {
+    (window as any).handleConfirmOrderAction = handleMessageAction;
+    return () => {
+      delete (window as any).handleConfirmOrderAction;
+    };
+  }, []);
 
   const getTotalCartItems = () => {
     return cartCounter;
