@@ -57,7 +57,15 @@
     "client:test:watch": "jest --watch",
     "client:dev:admin": "vite --mode admin",
     "client:dev:client": "vite --mode client",
-    "client:dev:all": "concurrently \"npm run client:dev:admin\" \"npm run client:dev:client\" --names \"admin,client\" --prefix-colors \"cyan,green\""
+    "client:dev:all": "concurrently \"npm run client:dev:admin\" \"npm run client:dev:client\" --names \"admin,client\" --prefix-colors \"cyan,green\"",
+    "cliente:dev": "vite --open /cliente.html",
+    "cliente:build": "vite build --mode cliente && move dist-cliente\\cliente.html dist-cliente\\index.html",
+    "cocina:dev": "vite --open /cocina.html --port 5175",
+    "cocina:build": "vite build --mode cocina && move dist-cocina\\cocina.html dist-cocina\\index.html",
+    "deploy:cliente": "npm run cliente:build && firebase deploy --only hosting:cliente",
+    "deploy:cocina": "npm run cocina:build && firebase deploy --only hosting:cocina",
+    "deploy:frontend": "npm run cliente:build && npm run cocina:build && firebase deploy --only hosting",
+    "deploy:all": "npm run deploy:frontend"
   },
   "keywords": [
     "chatbot",

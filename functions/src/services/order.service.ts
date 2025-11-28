@@ -1,0 +1,319 @@
+import {
+  CreateOrderDto,
+  DailyOrderStats,
+  Order,
+  OrderDish,
+  OrderStatus,
+  UpdateOrderStatusDto,
+} from '../models/order.model';
+import { CartItem } from '../models/session.model';
+import { MenuItemRepository } from '../repositories/menuItem.repository';
+import orderRepository, { OrderRepository } from '../repositories/order.repository';
+import { SessionRepository } from '../repositories/session.repository';
+// Socket.io no está soportado en Cloud Functions
+// import { getOrderSocketHandler } from '../sockets/order.socket';
+
+/**
+ * Servicio para gestionar comandas/pedidos
+ */
+export class OrderService {
+  private orderRepository: OrderRepository;
+  private menuItemRepository: MenuItemRepository;
+  private sessionRepository: SessionRepository;
+
+  constructor(repository: OrderRepository = orderRepository) {
+    this.orderRepository = repository;
+    this.menuItemRepository = new MenuItemRepository();
+    this.sessionRepository = new SessionRepository();
+  }
+
+  /**
+   * Crear una nueva comanda desde el carrito del usuario
+   */
+  async createFromCart(
+    tableNumber: number,
+    sessionId: string,
+    cartItems: CartItem[],
+    customerNotes?: string,
+  ): Promise<Order> {
+    // Obtener información completa de los items del menú
+    const dishes: OrderDish[] = [];
+
+    for (const item of cartItems) {
+      const menuItem = await this.menuItemRepository.findById(item.menuItemId);
+
+      if (!menuItem) {
+        throw new Error(`Menu item not found: ${item.menuItemId}`);
+      }
+
+      if (!menuItem.available) {
+        throw new Error(`Menu item not available: ${menuItem.name}`);
+      }
+
+      const specifications: string[] = [];
+      
+      // Agregar restricciones dietéticas como especificaciones
+      if (menuItem.isVegan) specifications.push('Vegano');
+      if (menuItem.isVegetarian) specifications.push('Vegetariano');
+      if (menuItem.isGlutenFree) specifications.push('Sin gluten');
+      if (menuItem.spicyLevel && menuItem.spicyLevel > 0) {
+        specifications.push(`Picante nivel ${menuItem.spicyLevel}`);
+      }
+
+      const dish: OrderDish = {
+        menuItemId: menuItem.id,
+        name: menuItem.name,
+        quantity: item.quantity,
+        price: menuItem.price,
+      };
+
+      // Solo agregar specifications si hay alguna
+      if (specifications.length > 0) {
+        dish.specifications = specifications;
+      }
+
+      // Solo agregar specialInstructions si no está vacío
+      if (item.specialInstructions && item.specialInstructions.trim().length > 0) {
+        dish.specialInstructions = item.specialInstructions.trim();
+      }
+
+      dishes.push(dish);
+    }
+
+    const createOrderDto: CreateOrderDto = {
+      tableNumber,
+      sessionId,
+      dishes,
+      customerNotes,
+      estimatedTime: this.calculateEstimatedTime(dishes),
+    };
+
+    const order = await this.orderRepository.create(createOrderDto);
+
+    // ✅ MARCAR ITEMS COMO CONFIRMADOS EN LA SESIÓN Y GUARDAR NÚMERO DE MESA
+    try {
+      const session = await this.sessionRepository.findById(sessionId);
+      if (session) {
+        // Actualizar solo los items del carrito que se acaban de confirmar
+        // IMPORTANTE: Solo confirmamos los items pendientes (no confirmed)
+        // Para evitar marcar duplicados cuando se agrega el mismo plato otra vez
+        const updatedCart: CartItem[] = [];
+        const itemsToConfirm = [...cartItems]; // Items pendientes que necesitan confirmarse
+        
+        for (const cartItem of session.cart) {
+          // Si el item ya está confirmado, mantenerlo sin cambios
+          if (cartItem.confirmed) {
+            updatedCart.push(cartItem);
+            continue;
+          }
+          
+          // Buscar si este item pendiente está en la lista de items a confirmar
+          const matchIndex = itemsToConfirm.findIndex(orderedItem => 
+            orderedItem.menuItemId === cartItem.menuItemId &&
+            (cartItem.specialInstructions || '') === (orderedItem.specialInstructions || '')
+          );
+          
+          if (matchIndex >= 0) {
+            // Este item pendiente debe ser confirmado
+            updatedCart.push({
+              ...cartItem,
+              confirmed: true,
+              orderId: order.id,
+              confirmedAt: new Date(),
+            });
+            // Remover de la lista para evitar confirmar el mismo item múltiples veces
+            itemsToConfirm.splice(matchIndex, 1);
+          } else {
+            // Item pendiente que no está en esta confirmación
+            updatedCart.push(cartItem);
+          }
+        }
+
+        // Guardar el número de mesa en la sesión si es el primer pedido
+        const updateData: { cart: CartItem[]; tableNumber?: number } = { cart: updatedCart };
+        if (!session.tableNumber) {
+          updateData.tableNumber = tableNumber;
+          console.log(`✅ Mesa ${tableNumber} asignada a la sesión ${sessionId}`);
+        }
+
+        await this.sessionRepository.update(sessionId, updateData);
+        console.log('✅ Items del carrito marcados como confirmados en Firestore');
+      }
+    } catch (error) {
+      console.error('⚠️ Error al marcar items como confirmados:', error);
+      // No lanzar error, la orden ya se creó exitosamente
+    }
+
+    // Notificar a través de WebSocket
+    // Socket.io no soportado en Cloud Functions - usar Firestore listeners en el cliente
+    /*
+    try {
+      const socketHandler = getOrderSocketHandler();
+      socketHandler.notifyOrderCreated(order);
+    } catch (error) {
+      // Si el socket no está inicializado, continuar sin error
+      console.warn('Could not notify order creation via WebSocket:', error);
+    }
+    */
+
+    return order;
+  }
+
+  /**
+   * Obtener una comanda por ID
+   */
+  async getById(id: string): Promise<Order | null> {
+    return await this.orderRepository.findById(id);
+  }
+
+  /**
+   * Obtener todas las comandas activas (para el tablero de cocina)
+   */
+  async getActiveOrders(): Promise<Order[]> {
+    return await this.orderRepository.findActive();
+  }
+
+  /**
+   * Obtener comandas por estado
+   */
+  async getOrdersByStatus(status: OrderStatus): Promise<Order[]> {
+    return await this.orderRepository.findByStatus(status);
+  }
+
+  /**
+   * Obtener comandas de una mesa
+   */
+  async getOrdersByTable(tableNumber: number): Promise<Order[]> {
+    return await this.orderRepository.findByTable(tableNumber);
+  }
+
+  /**
+   * Obtener comandas de una sesión
+   */
+  async getOrdersBySession(sessionId: string): Promise<Order[]> {
+    return await this.orderRepository.findBySession(sessionId);
+  }
+
+  /**
+   * Actualizar el estado de una comanda
+   */
+  async updateStatus(id: string, status: OrderStatus, cancelReason?: string): Promise<Order> {
+    const order = await this.orderRepository.findById(id);
+
+    if (!order) {
+      throw new Error(`Order not found: ${id}`);
+    }
+
+    // const previousStatus = order.status; // No se usa sin sockets
+
+    // Validar transiciones de estado
+    this.validateStatusTransition(order.status, status);
+
+    const updateDto: UpdateOrderStatusDto = {
+      status,
+      cancelReason,
+    };
+
+    const updatedOrder = await this.orderRepository.updateStatus(id, updateDto);
+
+    if (!updatedOrder) {
+      throw new Error(`Failed to update order: ${id}`);
+    }
+
+    // Notificar a través de WebSocket
+    // Socket.io no soportado en Cloud Functions - usar Firestore listeners en el cliente
+    /*
+    try {
+      const socketHandler = getOrderSocketHandler();
+      socketHandler.notifyOrderStatusChanged(updatedOrder, previousStatus);
+    } catch (error) {
+      console.warn('Could not notify order status change via WebSocket:', error);
+    }
+    */
+
+    return updatedOrder;
+  }
+
+  /**
+   * Obtener estadísticas del día
+   */
+  async getDailyStats(date: Date = new Date()): Promise<DailyOrderStats> {
+    return await this.orderRepository.getDailyStats(date);
+  }
+
+  /**
+   * Obtener comandas del día
+   */
+  async getTodayOrders(): Promise<Order[]> {
+    return await this.orderRepository.findByDate(new Date());
+  }
+
+  /**
+   * Cancelar una comanda
+   */
+  async cancelOrder(id: string, reason: string): Promise<Order> {
+    return await this.updateStatus(id, OrderStatus.CANCELLED, reason);
+  }
+
+  /**
+   * Calcular tiempo estimado de preparación basado en los platos
+   */
+  private calculateEstimatedTime(dishes: OrderDish[]): number {
+    // Tiempo base por plato (en minutos)
+    const baseTimePerDish = 10;
+    const maxTime = 45;
+    const minTime = 15;
+
+    const totalDishes = dishes.reduce((sum, dish) => sum + dish.quantity, 0);
+    const estimatedTime = Math.min(maxTime, Math.max(minTime, totalDishes * baseTimePerDish));
+
+    return estimatedTime;
+  }
+
+  /**
+   * Validar transiciones de estado permitidas
+   */
+  private validateStatusTransition(currentStatus: OrderStatus, newStatus: OrderStatus): void {
+    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+      [OrderStatus.PENDING]: [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
+      [OrderStatus.IN_PROGRESS]: [OrderStatus.READY, OrderStatus.CANCELLED],
+      [OrderStatus.READY]: [OrderStatus.SERVED, OrderStatus.CANCELLED],
+      [OrderStatus.SERVED]: [], // Estado final
+      [OrderStatus.CANCELLED]: [], // Estado final
+    };
+
+    const allowedTransitions = validTransitions[currentStatus];
+
+    if (!allowedTransitions.includes(newStatus)) {
+      throw new Error(
+        `Invalid status transition from ${currentStatus} to ${newStatus}`,
+      );
+    }
+  }
+
+  /**
+   * Obtener tiempo de preparación real de una comanda
+   */
+  getPreparationTime(order: Order): number | null {
+    if (!order.startedAt || !order.readyAt) {
+      return null;
+    }
+
+    const startTime = new Date(order.startedAt).getTime();
+    const readyTime = new Date(order.readyAt).getTime();
+
+    return Math.round((readyTime - startTime) / 60000); // En minutos
+  }
+
+  /**
+   * Obtener tiempo de espera actual de una comanda
+   */
+  getWaitingTime(order: Order): number {
+    const now = new Date().getTime();
+    const createdTime = new Date(order.createdAt).getTime();
+
+    return Math.round((now - createdTime) / 60000); // En minutos
+  }
+}
+
+export default new OrderService();

@@ -1,0 +1,24 @@
+services:
+  # Backend API con Socket.io
+  - type: web
+    name: menu-inteligente-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://iaa-menu-inteligente.web.app,https://cocina-iaa.web.app
+    autoDeploy: true
