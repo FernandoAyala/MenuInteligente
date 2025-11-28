@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { Application } from 'express';
 import { createServer } from 'http';
 import path from 'path';
+import { existsSync } from 'fs';
 import { Server } from 'socket.io';
 import { config } from './config/env.config';
 import { initializeFirebase } from './config/firebase.config';
@@ -81,21 +82,39 @@ app.use('/api/menu-items', menuItemRoutes); // Items del menú
 app.use('/health', healthRoutes); // US#74 Task#79: Health checks y métricas
 app.use('/metrics', healthRoutes); // US#74 Task#79: Métricas de performance
 
-// Servir archivos estáticos del frontend (PRODUCCIÓN)
-// En producción, el frontend compilado estará en /dist-frontend
+// Servir archivos estáticos del frontend (PRODUCCIÓN - solo si existe el directorio)
+// En Railway, el frontend está separado en Firebase Hosting
 if (config.nodeEnv === 'production') {
   const frontendPath = path.join(__dirname, '../dist-frontend');
   
-  // Servir archivos estáticos
-  app.use(express.static(frontendPath));
-  
-  // 404 solo para rutas API no encontradas
-  app.use('/api/*', notFoundHandler);
-  
-  // SPA fallback - todas las rutas no-API devuelven index.html
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(frontendPath, 'index.html'));
-  });
+  // Solo servir archivos estáticos si el directorio existe
+  if (existsSync(frontendPath)) {
+    // Servir archivos estáticos
+    app.use(express.static(frontendPath));
+    
+    // 404 solo para rutas API no encontradas
+    app.use('/api/*', notFoundHandler);
+    
+    // SPA fallback - todas las rutas no-API devuelven index.html
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(frontendPath, 'index.html'));
+    });
+  } else {
+    // Backend API only (Railway/Cloud deployment)
+    console.log('📡 Modo API only: Frontend en Firebase Hosting');
+    
+    // 404 para rutas API no encontradas
+    app.use('/api/*', notFoundHandler);
+    
+    // Cualquier otra ruta no-API devuelve info de la API
+    app.all('*', (req, res) => {
+      res.status(404).json({
+        error: 'Not Found',
+        message: `Route ${req.method} ${req.path} not found`,
+        hint: 'This is an API-only backend. Frontend is hosted separately.'
+      });
+    });
+  }
 } else {
   // En desarrollo, el frontend corre en Vite (puerto 5173)
   console.log('💻 Modo desarrollo: Frontend en http://localhost:5173');
