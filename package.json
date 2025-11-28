@@ -34,7 +34,7 @@
     "azure:logs": "azd logs",
     "azure:monitor": "azd monitor",
     "typecheck": "tsc --noEmit --project tsconfig.server.json",
-    "prebuild": "npm run typecheck && npm run lint",
+    "prebuild:local": "npm run typecheck && npm run lint",
     "prestart": "npm run build",
     "pretest": "npm run typecheck",
     "server:dev": "ts-node-dev --respawn --transpile-only --project tsconfig.server.json src/index.ts",

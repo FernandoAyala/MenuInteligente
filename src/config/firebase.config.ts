@@ -22,8 +22,17 @@ export function initializeFirebase(): void {
     }
 
     // Inicializar Firebase Admin
-    if (config.firebase.credentialsPath) {
-      // Usar service account credentials
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+      // Usar credenciales desde variable de entorno JSON (producción)
+      console.log('🔐 Usando credenciales de GOOGLE_APPLICATION_CREDENTIALS_JSON');
+      const serviceAccount = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+      
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: config.firebase.projectId,
+      });
+    } else if (config.firebase.credentialsPath) {
+      // Usar service account credentials desde archivo (desarrollo)
       const serviceAccountPath = join(__dirname, '../../', config.firebase.credentialsPath);
       const serviceAccountContent = readFileSync(serviceAccountPath, 'utf8');
       const serviceAccount = JSON.parse(serviceAccountContent);
