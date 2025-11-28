@@ -114,10 +114,9 @@ Identifica la intención principal usando EXACTAMENTE uno de estos valores:
 * ACCIONES DE PEDIDO:
   - "agregar_al_pedido": Quiere ordenar algo específico (ej: "Quiero una pizza", "Dame dos empanadas")
   - "quitar_del_pedido": Quiere eliminar del carrito (ej: "Sacá la hamburguesa", "Quitá la pizza", "Eliminá el brownie")
-  - "ver_carrito": Quiere revisar su pedido actual (ej: "Qué tengo en mi carrito?", "Mostrame mi pedido", "Qué pedí?")
   - "modificar_pedido": Cambiar orden existente (ej: "Cambiá la pizza por ensalada")
   - "cancelar_pedido": Cancelar orden completa (ej: "Cancelá mi pedido", "Borrá todo")
-  - "confirmar_pedido": Confirma y procede (ej: "Sí, confirmo", "Adelante", "Confirmar pedido")
+  - "confirmar_pedido": Confirma y procede (ej: "Sí, confirmo", "Adelante")
   - "solicitar_cuenta": Pide la cuenta final (ej: "La cuenta por favor", "Quiero pagar", "Cuánto es todo?")
 
 * OTRAS:
@@ -293,12 +292,11 @@ export const NLUPrompts = {
  * Todos los valores están en ESPAÑOL para coincidir exactamente con el prompt
  */
 export interface IntentExtractionResult {
-  // Intención principal: una de las definidas en el prompt
+  // Intención principal: una de las 13 definidas en el prompt
   intent: 'saludo' | 'agradecer' | 'consultar_menu' | 'recomendar' | 
           'preguntar_precio' | 'preguntar_ingredientes' | 'preguntar_disponibilidad' | 
-          'consultar_alergenos' | 'agregar_al_pedido' | 'quitar_del_pedido' | 
-          'ver_carrito' | 'modificar_pedido' | 'cancelar_pedido' | 
-          'confirmar_pedido' | 'solicitar_cuenta' | 'otro';
+          'consultar_alergenos' | 'agregar_al_pedido' | 'modificar_pedido' | 
+          'cancelar_pedido' | 'confirmar_pedido' | 'otro';
   
   // Sub-intención opcional (para casos específicos)
   subIntent?: string;
