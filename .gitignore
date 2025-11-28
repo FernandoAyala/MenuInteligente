@@ -15,15 +15,16 @@ functions/lib/
 functions/node_modules/
 
 # Environment variables
-#.env
+.env
 .env.local
 .env.*.local
+.env.production
 .env.production.local
 .env.development.local
 .env.render
 
 # Firebase credentials
-#config/serviceAccountKey.json
+config/serviceAccountKey.json
 firebase-debug.log
 firestore-debug.log
 .firebase/
