@@ -266,10 +266,10 @@ export class ChatController {
         }
       }
 
-      // 4. Generar recomendaciones si se requieren (VIEW_MENU o REQUEST_RECOMMENDATION)
+// 4. Generar recomendaciones si se requieren (solo REQUEST_RECOMMENDATION, no VIEW_MENU)
       let recommendations: Recommendation[] | undefined = undefined;
       const needsRecommendations = actions.some(
-        action => action.type === ChatActionType.REQUEST_RECOMMENDATION || action.type === ChatActionType.VIEW_MENU
+        action => action.type === ChatActionType.REQUEST_RECOMMENDATION
       );
       
       // 🔍 PRIORIDAD: Si hay platos específicos mencionados (dishesMetioned), buscarlos directamente
@@ -1035,8 +1035,14 @@ export class ChatController {
       return conversationalResponses[Math.floor(Math.random() * conversationalResponses.length)];
     }
     
-    // 3. RECOMENDACIONES - Solo cuando explícitamente lo piden
-    if (actionTypes.includes(ChatActionType.REQUEST_RECOMMENDATION) || actionTypes.includes(ChatActionType.VIEW_MENU)) {
+    // 3. VER MENÚ COMPLETO - Sin recomendaciones, solo botón
+    if (actionTypes.includes(ChatActionType.VIEW_MENU)) {
+      return '¡Perfecto! 📋 Aquí tienes nuestro menú completo. Haz clic en el botón para ver todas nuestras opciones disponibles.';
+    }
+    
+    // 3.1. RECOMENDACIONES - Solo cuando explícitamente lo piden
+    if (actionTypes.includes(ChatActionType.REQUEST_RECOMMENDATION)) {
+      // Mensaje para recomendaciones
       if (hasRecommendations) {
         const count = recommendations.length;
         return `¡Perfecto! Te recomiendo ${count === 1 ? 'está opción' : `estas ${count} opciones`} basándome en tus preferencias. ¿Te gusta alguno?`;
@@ -1097,12 +1103,52 @@ export class ChatController {
 
     // 5. VER CARRITO / SOLICITAR CUENTA
     if (actionTypes.includes(ChatActionType.VIEW_CART)) {
-      // Si el mensaje incluye palabras de "cuenta" o "pagar", mostrar total
-      if (msgLower.includes('cuenta') || msgLower.includes('pagar') || msgLower.includes('cuánto') || msgLower.includes('cuanto')) {
-        return 'Por supuesto, aquí está tu cuenta. Puedes ver el detalle completo en el panel del carrito. ¿Deseas confirmar el pedido para que proceda el pago?';
+      try {
+        if (!sessionId) {
+          return 'Tu carrito está vacío. ¿Qué te gustaría ordenar?';
+        }
+        
+        const session = await this.sessionRepository.findById(sessionId);
+        const currentCart = session?.cart || [];
+        const pendingItems = currentCart.filter((item: { confirmed?: boolean }) => !item.confirmed);
+        
+        if (pendingItems.length === 0) {
+          return 'Tu carrito está vacío. ¿Qué te gustaría ordenar?';
+        }
+        
+        // Construir resumen del carrito
+        let summary = '🛒 *Tu carrito actual:*\n\n';
+        let total = 0;
+        
+        for (const item of pendingItems) {
+          const menuItem = await this.menuItemRepository.findById(item.menuItemId);
+          if (menuItem) {
+            const itemTotal = menuItem.price * item.quantity;
+            total += itemTotal;
+            summary += `• ${menuItem.name} x${item.quantity} - $${itemTotal.toLocaleString()}\n`;
+            
+            if (item.specialInstructions) {
+              summary += `  _${item.specialInstructions}_\n`;
+            }
+          }
+        }
+        
+        summary += `\n*Total: $${total.toLocaleString()}*\n\n`;
+        
+        // Si el mensaje incluye palabras de "cuenta" o "pagar", sugerir confirmar
+        if (msgLower.includes('cuenta') || msgLower.includes('pagar') || msgLower.includes('cuánto') || msgLower.includes('cuanto')) {
+          summary += '¿Deseas confirmar el pedido para proceder al pago?';
+        } else {
+          summary += '¿Deseas modificar algo o estás listo para confirmar?';
+        }
+        
+        return summary;
+      } catch (error) {
+        logger.error('Error generando resumen del carrito para VIEW_CART', { error });
+        return 'Aquí está tu pedido actual. Puedes ver el detalle completo en el panel del carrito.';
       }
-      return 'Aquí está tu pedido actual. ¿Deseas modificar algo o estás listo para confirmar?';
     }
+
 
     // 5.1 QUITAR DEL CARRITO
     if (actionTypes.includes(ChatActionType.REMOVE_FROM_CART)) {
@@ -1506,6 +1552,10 @@ NO inventes ingredientes que no estén en la descripción original. Si la descri
     // ACCIONES DE PEDIDO
     if (primaryIntent === 'agregar_al_pedido') {
       actions.push(createChatAction(ChatActionType.ADD_TO_CART, 'Agregar al carrito'));
+    }
+
+    if (primaryIntent === 'ver_carrito') {
+      actions.push(createChatAction(ChatActionType.VIEW_CART, 'Ver carrito'));
     }
     
     if (primaryIntent === 'quitar_del_pedido') {

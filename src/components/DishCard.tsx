@@ -59,10 +59,13 @@ const DishCard: React.FC<DishCardProps> = ({
     onViewAlternatives?.(menuItem);
   };
 
+  // Determinar si la tarjeta debe ser clickeable
+  const isClickable = variant === 'chat' && menuItem.available && (onInterested || onViewAlternatives);
+
   return (
     <div 
-      className={`bg-white rounded-lg shadow-md overflow-hidden cursor-pointer transition-transform hover:scale-105 flex flex-col min-h-[320px] ${className}`}
-      onClick={handleCardClick}
+      className={`bg-white rounded-lg shadow-md overflow-hidden ${isClickable ? 'cursor-pointer transition-transform hover:scale-105' : ''} flex flex-col min-h-[320px] ${className}`}
+      onClick={isClickable ? handleCardClick : undefined}
     >
       {/* Imagen del plato */}
       {menuItem.imageUrl && (
@@ -129,9 +132,9 @@ const DishCard: React.FC<DishCardProps> = ({
 
         {/* Botones de acción según variante */}
         <div className="mt-auto">
-          {variant === 'chat' && menuItem.available && (onInterested || onViewAlternatives) ? (
+          {variant === 'chat' && menuItem.available ? (
             <div className="space-y-2">
-              {/* Botones principales para chat */}
+              {/* Botones principales para chat - solo si hay handlers */}
               {(onInterested || onViewAlternatives) && (
                 <div className="flex gap-2">
                   {onInterested && (

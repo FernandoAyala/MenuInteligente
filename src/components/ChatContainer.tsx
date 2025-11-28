@@ -6,6 +6,7 @@ import { useShoppingCart } from '../hooks/useWebSocket';
 import { ChatAction, MenuItem } from '../types';
 import { CartPanel } from './CartPanel';
 import ConnectionStatusIndicator from './ConnectionStatusIndicator';
+import FullMenuModal from './FullMenuModal';
 import InputArea from './InputArea';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
@@ -70,6 +71,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [autoVoiceEnabled, setAutoVoiceEnabled] = useState<boolean>(true);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [cartUpdateTrigger, setCartUpdateTrigger] = useState(0); // Trigger para recargar el carrito
   const [cartCounter, setCartCounter] = useState(0); // Contador local para forzar actualización
   const lastAutoSpokenMessageId = useRef<string | null>(null);
@@ -310,11 +312,18 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
     // Aquí se pueden agregar más tipos de acciones en el futuro
   };
 
+  const handleViewMenuAction = (action: ChatAction) => {
+    console.log('📋 Abrir menú completo:', action);
+    setIsMenuModalOpen(true);
+  };
+
   // Exponer handleMessageAction globalmente para ConfirmOrderButton
   useEffect(() => {
     (window as any).handleConfirmOrderAction = handleMessageAction;
+    (window as any).handleViewMenuAction = handleViewMenuAction;
     return () => {
       delete (window as any).handleConfirmOrderAction;
+      delete (window as any).handleViewMenuAction;
     };
   }, []);
 
@@ -570,6 +579,14 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         onRemoveItem={handleRemoveItem}
         onRequestBill={handleRequestBill}
         updateTrigger={cartUpdateTrigger}
+      />
+
+      {/* Modal del menú completo */}
+      <FullMenuModal
+        isOpen={isMenuModalOpen}
+        onClose={() => setIsMenuModalOpen(false)}
+        onAddToCart={handleAddToCart}
+        onItemInterested={handleItemInterested}
       />
     </div>
   );
