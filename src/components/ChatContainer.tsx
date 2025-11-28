@@ -492,6 +492,13 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
         {/* Carrito y configuración */}
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setIsMenuModalOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-full text-sm transition-colors cursor-pointer"
+          >
+            📋 Menú
+          </button>
+          
+          <button
             onClick={() => setIsCartOpen(true)}
             className="relative bg-accent-green text-white px-3 py-1 rounded-full text-sm hover:bg-green-600 transition-colors cursor-pointer"
           >

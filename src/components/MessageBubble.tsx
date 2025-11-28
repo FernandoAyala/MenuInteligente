@@ -152,22 +152,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   />
                 );
               }
-              
-              if (action.type === 'view_menu') {
-                return (
-                  <ViewFullMenuButton
-                    key={`action-${index}`}
-                    action={action}
-                    onClick={(menuAction) => {
-                      // Llamar al handler global
-                      if ((window as any).handleViewMenuAction) {
-                        (window as any).handleViewMenuAction(menuAction);
-                      }
-                    }}
-                  />
-                );
-              }
-              
               return null;
             })}
           </div>
