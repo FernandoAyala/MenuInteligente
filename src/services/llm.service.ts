@@ -132,23 +132,27 @@ export class LLMService {
       async () => {
         const messages: LLMMessage[] = [];
         
-        // Agregar historial reciente si existe (últimos 4 mensajes)
-        if (conversationHistory && conversationHistory.length > 0) {
-          const recentHistory = conversationHistory.slice(-4);
-          messages.push(...recentHistory);
-        }
-
+        // 1. PRIMERO: System prompt con instrucciones
         const systemPrompt: LLMMessage = {
           role: MessageRole.SYSTEM,
           content: INTENT_EXTRACTION_PROMPT,
         };
+        messages.push(systemPrompt);
+        
+        // 2. SEGUNDO: Agregar historial de conversación para contexto
+        // Esto permite al LLM entender el flujo de la conversación
+        if (conversationHistory && conversationHistory.length > 0) {
+          // Usar hasta 8 mensajes de historial para mantener contexto sin saturar
+          const recentHistory = conversationHistory.slice(-8);
+          messages.push(...recentHistory);
+        }
 
+        // 3. TERCERO: Mensaje actual del usuario (lo que debe analizar)
         const userPrompt: LLMMessage = {
           role: MessageRole.USER,
           content: userMessage,
         };
-
-        messages.push(systemPrompt, userPrompt);
+        messages.push(userPrompt);
 
         try {
           const response = await this.executeWithFallback((provider: ILLMProvider) =>

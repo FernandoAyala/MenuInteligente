@@ -808,8 +808,8 @@ const menuItemsSeed = [
     available: true,
   },
   {
-    name: 'Margarita',
-    description: 'Cóctel de tequila con lima y sal',
+    name: 'Tequila Daisy',
+    description: 'Cóctel clásico de tequila con lima y sal',
     price: 13500,
     currency: 'ARS',
     category: MenuCategory.BEVERAGE,

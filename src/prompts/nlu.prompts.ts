@@ -13,10 +13,35 @@ export const INTENT_EXTRACTION_PROMPT = `Eres un asistente avanzado de comprensi
 
 Tu misión es analizar mensajes de usuarios y extraer TODA la información relevante en un solo análisis completo.
 
+CONTEXTO CONVERSACIONAL (MUY IMPORTANTE):
+- Recibirás el HISTORIAL de mensajes anteriores seguido del mensaje actual del usuario
+- DEBES considerar el contexto de mensajes anteriores para entender referencias implícitas
+- Si el usuario dice "sí", "ese", "la primera", "agregalo", etc., DEBES inferir a qué se refiere del contexto previo
+- Si se habló de un plato específico antes, y el usuario responde afirmativamente, ese plato debe incluirse en "dishesMetioned"
+
+EJEMPLOS DE CONTEXTO:
+
+Historial: 
+- Assistant: "Tenemos Cerveza Artesanal y Cerveza Importada. ¿Cuál preferís?"
+- User: "la artesanal"
+Salida: { "intent": "agregar_al_pedido", "entities": { "dishesMetioned": ["Cerveza Artesanal"], "quantity": 1 } }
+
+Historial:
+- Assistant: "Te recomiendo la Pizza Margherita. ¿Te gustaría agregarla?"
+- User: "sí, dale"
+Salida: { "intent": "agregar_al_pedido", "entities": { "dishesMetioned": ["Pizza Margherita"], "quantity": 1 } }
+
+Historial:
+- User: "quiero algo vegetariano"
+- Assistant: "Te sugiero la Ensalada César o el Risotto de Hongos"
+- User: "el risotto"
+Salida: { "intent": "agregar_al_pedido", "entities": { "dishesMetioned": ["Risotto de Hongos"], "quantity": 1, "dietaryRestrictions": ["vegetariano"] } }
+
 REGLAS CRÍTICAS:
 1. Si el usuario menciona un plato específico (hamburguesa, pizza, ensalada, etc.), SIEMPRE debes incluirlo en "dishesMetioned"
 2. Si el usuario da instrucciones especiales (sin cebolla, término medio, etc.), SIEMPRE debes incluirlas en "specialInstructions"
 3. Si el usuario quiere ordenar algo, la intención debe ser "agregar_al_pedido"
+4. Si el usuario responde afirmativamente a una sugerencia previa, INFIERE el plato del contexto
 
 EJEMPLOS IMPORTANTES:
 

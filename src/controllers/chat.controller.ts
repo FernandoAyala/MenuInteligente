@@ -17,7 +17,7 @@ import {
   createChatAction,
   PipelineStage
 } from '../interfaces/chat.interface';
-import { MessageRole as LLMMessageRole } from '../interfaces/llm.interface';
+import { LLMMessage, MessageRole as LLMMessageRole } from '../interfaces/llm.interface';
 import { Recommendation } from '../interfaces/recommendation.interface';
 import { withTimeout } from '../middleware/error-handler.middleware';
 import { MenuItem, SpicyLevel } from '../models/menuItem.model';
@@ -86,20 +86,33 @@ export class ChatController {
       // 2. Procesar con LLM - Extracción de intenciones CON contexto de historial
       const llmStartTime = Date.now();
       
-      // Construir contexto con historial (últimos 5 mensajes para no saturar)
-      const recentMessages = session.messages.slice(-5);
-      const contextForLLM = recentMessages.length > 0 
-        ? `\n\nHistorial reciente:\n${recentMessages.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nPreferencias guardadas: ${JSON.stringify(session.slots)}\n\n`
+      // Construir historial de conversación como array de LLMMessage (últimos 10 mensajes para mejor contexto)
+      const recentMessages = session.messages.slice(-10);
+      const conversationHistory: LLMMessage[] = recentMessages.map(m => ({
+        role: m.role === MessageRole.USER ? LLMMessageRole.USER : LLMMessageRole.ASSISTANT,
+        content: m.content
+      }));
+      
+      // Construir mensaje enriquecido con contexto de preferencias acumuladas
+      const slotsContext = Object.keys(session.slots).length > 0
+        ? `\n[Contexto del cliente - preferencias acumuladas: ${JSON.stringify(session.slots)}]`
         : '';
       
-      const messageWithContext = contextForLLM + chatRequest.message;
+      const messageWithContext = chatRequest.message + slotsContext;
+      
+      logger.debug('Sending to LLM with conversation history', {
+        sessionId,
+        historyLength: conversationHistory.length,
+        hasSlots: Object.keys(session.slots).length > 0,
+        recentMessages: conversationHistory.map(m => ({ role: m.role, preview: m.content.substring(0, 50) }))
+      });
       
       // Extraer intenciones con timeout y fallback mejorado
       let intents;
       let llmFailed = false; // Flag para saber si el LLM falló
       try {
         intents = await withTimeout(
-          this.llmService.extractDetailedIntents(messageWithContext),
+          this.llmService.extractDetailedIntents(messageWithContext, conversationHistory),
           30000, // Aumentado a 30s para proveedores LLM lentos (OpenAI, Anthropic)
           'llm-intent-extraction'
         );
@@ -258,8 +271,70 @@ export class ChatController {
       const needsRecommendations = actions.some(
         action => action.type === ChatActionType.REQUEST_RECOMMENDATION || action.type === ChatActionType.VIEW_MENU
       );
+      
+      // 🔍 PRIORIDAD: Si hay platos específicos mencionados (dishesMetioned), buscarlos directamente
+      const hasDishesMetioned = intents.entities?.dishesMetioned && intents.entities.dishesMetioned.length > 0;
 
-      if (needsRecommendations) {
+      if (needsRecommendations && hasDishesMetioned) {
+        // Hay platos específicos mencionados → buscar esos primero
+        logger.info('Dishes mentioned with recommendation request, searching specific dishes first', {
+          sessionId,
+          dishes: intents.entities.dishesMetioned
+        });
+        
+        try {
+          const { found, notFound } = await this.checkDishAvailability(intents.entities.dishesMetioned);
+          
+          if (found.length > 0) {
+            // Convertir a formato Recommendation
+            recommendations = found.map((dish, index) => ({
+              dish: {
+                id: dish.id,
+                name: dish.name,
+                description: dish.description,
+                price: dish.price,
+                currency: dish.currency,
+                category: dish.category,
+                spicyLevel: dish.spicyLevel,
+                isVegan: dish.isVegan,
+                isVegetarian: dish.isVegetarian,
+                isGlutenFree: dish.isGlutenFree,
+                allergens: dish.allergens,
+                available: dish.available,
+                imageUrl: dish.imageUrl
+              },
+              score: 100,
+              rank: index + 1,
+              justification: `Encontré ${dish.name} que coincide con tu búsqueda`,
+              matchReasons: ['Coincide con tu búsqueda'],
+              scoreBreakdown: {
+                safety: 100, dietaryMatch: 100, budgetFit: 100, preferencesMatch: 100,
+                semanticScore: 100, availability: dish.available ? 100 : 0, total: 100,
+                weights: { safety: 1.0, dietaryMatch: 0, budgetFit: 0, preferencesMatch: 0, semanticScore: 0, availability: 0 }
+              },
+              safetyChecks: [{ type: 'dietary_restriction' as const, passed: true, details: 'Búsqueda directa', severity: 'low' as const, checkedAt: new Date() }]
+            }));
+            
+            logger.info('Found specific dishes from dishesMetioned', {
+              sessionId,
+              foundCount: found.length,
+              dishes: found.map(d => d.name)
+            });
+          }
+          
+          if (notFound.length > 0) {
+            logger.warn('Some dishes from dishesMetioned not found', { sessionId, notFound });
+          }
+        } catch (error) {
+          logger.error('Failed to search specific dishes from dishesMetioned', {
+            sessionId,
+            error: error instanceof Error ? error.message : 'Unknown'
+          });
+        }
+      }
+      
+      // Si no se encontraron platos específicos, generar recomendaciones normales
+      if (needsRecommendations && !recommendations) {
         try {
           const recStartTime = Date.now();
           logger.info('Generating recommendations...', { sessionId });
@@ -412,13 +487,17 @@ export class ChatController {
 
             // ✅ DECIDIR SI AGREGAR AUTOMÁTICAMENTE O SOLO MOSTRAR
             // Si el usuario usó un comando EXPLÍCITO (agregar, añadir, poner),
-            // agregamos automáticamente al carrito
+            // agregamos automáticamente al carrito SOLO si hay exactamente 1 resultado
             const explicitAddKeywords = ['agregar', 'añadir', 'añade', 'agrega', 'pon', 'ponme', 'poner'];
             const hasExplicitAddCommand = explicitAddKeywords.some(kw => chatRequest.message.toLowerCase().includes(kw));
             
-            if (hasExplicitAddCommand) {
-              // Comando explícito: agregar automáticamente
-              logger.info('Explicit ADD command detected, adding to cart automatically', { sessionId });
+            // 🔍 NUEVO: Si hay múltiples coincidencias, NO agregar automáticamente
+            // El usuario debe especificar cuál quiere (ej: "cerveza artesanal" vs "cerveza importada")
+            const hasMultipleMatches = found.length > 1;
+            
+            if (hasExplicitAddCommand && !hasMultipleMatches) {
+              // Comando explícito CON un solo resultado: agregar automáticamente
+              logger.info('Explicit ADD command detected with single match, adding to cart automatically', { sessionId });
               autoAddedToCart = true; // Marcar que se agregó automáticamente
               
               try {
@@ -473,6 +552,14 @@ export class ChatController {
                   error: cartError instanceof Error ? cartError.message : 'Unknown',
                 });
               }
+            } else if (hasMultipleMatches) {
+              // Múltiples coincidencias: mostrar opciones para que el usuario elija
+              logger.info('Multiple matches found, showing options instead of auto-adding', {
+                sessionId: session.id,
+                dishCount: found.length,
+                dishes: found.map(d => d.name)
+              });
+              // autoAddedToCart se mantiene en false, se mostrarán las recomendaciones
             } else {
               // Sin comando explícito: solo mostrar opciones
               logger.info('No explicit command, showing recommendations only', {
@@ -776,13 +863,14 @@ export class ChatController {
       ...(newEntities.preferences || [])
     ]);
 
-    // Budget: usar el nuevo si existe, sino mantener el anterior
-    const budget = newEntities.budget !== undefined 
+    // Budget: usar el nuevo SOLO si tiene valor real, sino mantener el anterior
+    // (null o undefined significa que no se mencionó en este mensaje)
+    const budget = (newEntities.budget !== undefined && newEntities.budget !== null)
       ? newEntities.budget 
       : oldSlots.budget;
 
-    // SpicyPreference: usar el nuevo si existe, sino mantener el anterior
-    const spicyPreference = newEntities.spicyLevel 
+    // SpicyPreference: usar el nuevo SOLO si tiene valor real, sino mantener el anterior
+    const spicyPreference = (newEntities.spicyLevel !== undefined && newEntities.spicyLevel !== null)
       ? this.convertSpicyLevel(newEntities.spicyLevel)
       : oldSlots.spicyPreference;
 
@@ -888,6 +976,17 @@ export class ChatController {
       return greetings[Math.floor(Math.random() * greetings.length)];
     }
     
+    // 1.5 DESPEDIDAS Y AGRADECIMIENTOS
+    if (msgLower.match(/\b(chau|adiós|adios|hasta luego|nos vemos|bye|gracias|muchas gracias|ok gracias|bueno gracias)\b/) && actions.length === 0) {
+      const farewells = [
+        '¡Gracias por visitarnos! 👋 ¡Hasta pronto!',
+        '¡Fue un placer atenderte! 😊 ¡Volvé cuando quieras!',
+        '¡Hasta luego! 🍽️ Esperamos verte pronto.',
+        '¡Gracias! Si necesitás algo, acá estoy. ¡A tú servicio!',
+      ];
+      return farewells[Math.floor(Math.random() * farewells.length)];
+    }
+    
     // 2. CONSULTAS GENERALES - Extraer información antes de recomendar
     if (actions.length === 0) {
       const entities = intents.entities || {};
@@ -987,7 +1086,9 @@ export class ChatController {
           const dish = recommendations[0].dish;
           return `¡Perfecto! Encontré esto para ti:\n\n${dish.name} - $${dish.price.toLocaleString()}\n${dish.description}\n\n¿Te gustaría agregarlo al carrito? 🛒`;
         } else {
-          return `¡Genial! Encontré ${recommendations.length} opciones para ti. 🍽️\n\nMira las opciones abajo y haz clic en "Agregar" en la que más te guste, o dime cuál prefieres.`;
+          // Múltiples opciones: el usuario debe elegir cuál quiere
+          const dishNames = recommendations.map(r => r.dish.name).join(', ');
+          return `Encontré ${recommendations.length} opciones similares: ${dishNames}. 🍽️\n\n¿Cuál te gustaría agregar? Podés decirme el nombre específico o elegir de las opciones abajo.`;
         }
       }
       // Si no hay recomendaciones específicas, mensaje genérico
