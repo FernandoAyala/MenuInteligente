@@ -11,43 +11,18 @@ import { initializeFirebase } from './config/firebase.config';
 const app: Application = express();
 const httpServer = createServer(app);
 
-// Función para validar origen CORS
-const validateOrigin = (origin: string | undefined): boolean => {
-  if (!origin) return true; // Permitir requests sin origin (mobile apps, curl)
-  
-  const allowedOrigins = config.allowedOrigins;
-  
-  // Verificar lista de orígenes permitidos
-  if (allowedOrigins.some(allowed => allowed === '*' || origin === allowed)) {
-    return true;
-  }
-  
-  // Permitir automáticamente dominios de Firebase Hosting
-  if (origin.includes('.web.app') || origin.includes('.firebaseapp.com')) {
-    return true;
-  }
-  
-  console.warn(`CORS blocked origin: ${origin}`);
-  return false;
-};
-
-// Configuración de CORS para Express
+// Configuración de CORS - permitir todos los orígenes temporalmente
 const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    callback(null, validateOrigin(origin));
-  },
+  origin: true, // Permitir todos los orígenes
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 };
 
-// Configuración de Socket.io con soporte para múltiples frontends
+// Configuración de Socket.io
 const io = new Server(httpServer, {
   cors: {
-    origin: (origin, callback) => {
-      callback(null, validateOrigin(origin));
-    },
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    origin: true, // Permitir todos los orígenes
     credentials: true,
   },
 });
@@ -58,7 +33,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Inicializar Firebase
-initializeFirebase();
+console.log('🔥 Inicializando Firebase...');
+try {
+  initializeFirebase();
+  console.log('✅ Firebase inicializado');
+} catch (error) {
+  console.error('❌ Error inicializando Firebase:', error);
+  throw error;
+}
 
 // Importar rutas
 import analyticsRoutes from './routes/analytics.routes';

@@ -1,0 +1,15 @@
+node_modules
+dist-cliente
+dist-cocina
+*.test.ts
+*.test.js
+__tests__
+tests
+.git
+.vscode
+*.md
+.env.local
+.env.development
+coverage
+.eslintrc.js
+.prettierrc
