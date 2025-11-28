@@ -184,5 +184,22 @@ httpServer.listen(PORT, () => {
   console.log(`🔥 Firebase proyecto: ${config.firebase.projectId}`);
 });
 
+// Manejo de errores no capturados
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // No cerrar el proceso en producción para que el healthcheck pueda funcionar
+  if (config.nodeEnv !== 'production') {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // No cerrar el proceso en producción
+  if (config.nodeEnv !== 'production') {
+    process.exit(1);
+  }
+});
+
 export { app, io };
 
