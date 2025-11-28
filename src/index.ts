@@ -44,7 +44,9 @@ const corsOptions = {
 // Configuración de Socket.io con soporte para múltiples frontends
 const io = new Server(httpServer, {
   cors: {
-    origin: validateOrigin,
+    origin: (origin, callback) => {
+      callback(null, validateOrigin(origin));
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
   },
