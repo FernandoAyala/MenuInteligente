@@ -272,11 +272,12 @@ export class ChatController {
                 spicyLevel: updatedSlots.spicyPreference,
                 mealType: intents.entities.mealType ? [intents.entities.mealType] : undefined,
                 preferredCategories: updatedSlots.preferredCategories || [],
-                tags: intents.entities.preferences || [], // Agregar tags de preferencias del intent
+                tags: intents.entities.preferences || [],
                 additionalNotes: chatRequest.message
-              }
+              },
+              budget: updatedSlots.budget
             }),
-            5000, // 5 segundos sin semantic scoring (antes 15s)
+            5000,
             'recommendations'
           );
           
@@ -738,10 +739,10 @@ export class ChatController {
     if (!level) return undefined;
 
     const mapping: Record<string, SpicyLevel> = {
-      'none': SpicyLevel.NONE,
-      'low': SpicyLevel.MILD,
-      'medium': SpicyLevel.MEDIUM,
-      'high': SpicyLevel.HOT
+      'nada': SpicyLevel.NONE,
+      'bajo': SpicyLevel.MILD,
+      'medio': SpicyLevel.MEDIUM,
+      'alto': SpicyLevel.HOT
     };
 
     return mapping[level] || undefined;
@@ -774,8 +775,8 @@ export class ChatController {
     ]);
 
     // Budget: usar el nuevo si existe, sino mantener el anterior
-    const budget = newEntities.budget?.max !== undefined 
-      ? newEntities.budget.max 
+    const budget = newEntities.budget !== undefined 
+      ? newEntities.budget 
       : oldSlots.budget;
 
     // SpicyPreference: usar el nuevo si existe, sino mantener el anterior
@@ -1284,7 +1285,9 @@ NO inventes ingredientes que no estén en la descripción original. Si la descri
 
     // 13. RESPUESTA POR DEFECTO
     return 'Entiendo. ¿En qué más puedo ayudarte? Puedo recomendarte platos, mostrarte el menú o ayudarte con tu pedido.';
-  }  /**
+  }  
+  
+  /**
    * Convierte intenciones del LLM a acciones del chat
    */
   private convertIntentsToActions(intents: any): ChatAction[] {

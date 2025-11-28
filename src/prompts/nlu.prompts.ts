@@ -172,12 +172,12 @@ Extrae TODAS las entidades mencionadas (SIEMPRE EN ESPAÑOL):
   - Ejemplos: "dos pizzas" → 2, "para tres personas" → 3
 
 * Variable: spicyLevel (string | null):
-  - Valores permitidos: "none" | "low" | "medium" | "high" | null
+  - Valores permitidos: "nada" | "bajo" | "medio" | "alto" | null
   - Ejemplo:
-    - "sin picante", "nada picante", "suave" → "none"
-    - "poco picante", "leve" → "low"
-    - "medio picante", "moderado" → "medium"
-    - "muy picante", "picante", "caliente" → "high"
+    - "sin picante", "nada picante", "suave" → "nada"
+    - "poco picante", "leve" → "bajo"
+    - "medio picante", "moderado" → "medio"
+    - "muy picante", "picante", "caliente" → "alto"
 
 * Variable: mealType (string | null):
   - Valores permitidos: "entrada" | "principal" | "postre" | "bebida" | "acompañamiento" | null
@@ -185,7 +185,7 @@ Extrae TODAS las entidades mencionadas (SIEMPRE EN ESPAÑOL):
     - "entrada", "aperitivo", "starter" → "entrada"
     - "plato principal", "plato fuerte", "segundo", "main" → "principal"
     - "postre", "dulce", "dessert" → "postre"
-    - "bebida", "trago", "drink" → "bebida"
+    - "bebida", "bebidas", "trago", "drink" → "bebida"
     - "acompañamiento", "guarnición", "side" → "acompañamiento"
   - NO CONFUNDIR: "vegetariano" NO es mealType, es dietaryRestriction
 
@@ -292,8 +292,8 @@ export interface IntentExtractionResult {
     // Cantidad de porciones/personas
     quantity: number | null;
     
-    // Nivel de picante: "none" | "low" | "medium" | "high"
-    spicyLevel: 'none' | 'low' | 'medium' | 'high' | null;
+    // Nivel de picante: "nada" | "bajo" | "medio" | "alto"
+    spicyLevel: 'nada' | 'bajo' | 'medio' | 'alto' | null;
     
     // Tipo de comida: "entrada" | "principal" | "postre" | "bebida" | "acompañamiento" (EN ESPAÑOL)
     mealType: 'entrada' | 'principal' | 'postre' | 'bebida' | 'acompañamiento' | null;

@@ -34,7 +34,7 @@ export interface CartItem {
 export interface ConversationSlots {
   dietaryRestrictions?: string[];
   allergens?: string[];
-  budget?: number;
+  budget?: any
   preferredCategories?: string[];
   spicyPreference?: number;
   [key: string]: unknown; // Permite otros slots dinámicos

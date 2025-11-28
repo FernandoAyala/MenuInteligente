@@ -119,12 +119,25 @@ export class LLMService {
 
   /**
    * Extrae intenciones completas con entidades estructuradas
-   * Usa el prompt especializado de NLU
+   * Usa el prompt especializado de NLU con contexto conversacional
+   * @param userMessage Mensaje del usuario
+   * @param conversationHistory Historial de conversación para contexto (opcional)
    */
-  async extractDetailedIntents(userMessage: string): Promise<IntentExtractionResult> {
+  async extractDetailedIntents(
+    userMessage: string,
+    conversationHistory?: LLMMessage[]
+  ): Promise<IntentExtractionResult> {
     return performanceProfiler.trackAsync(
       'llm.extractIntents',
       async () => {
+        const messages: LLMMessage[] = [];
+        
+        // Agregar historial reciente si existe (últimos 4 mensajes)
+        if (conversationHistory && conversationHistory.length > 0) {
+          const recentHistory = conversationHistory.slice(-4);
+          messages.push(...recentHistory);
+        }
+
         const systemPrompt: LLMMessage = {
           role: MessageRole.SYSTEM,
           content: INTENT_EXTRACTION_PROMPT,
@@ -135,11 +148,13 @@ export class LLMService {
           content: userMessage,
         };
 
+        messages.push(systemPrompt, userPrompt);
+
         try {
           const response = await this.executeWithFallback((provider: ILLMProvider) =>
-            provider.generateResponse([systemPrompt, userPrompt], {
-              temperature: 0.3,
-              maxTokens: 800,
+            provider.generateResponse(messages, {
+              temperature: 0.1,
+              maxTokens: 1000,
             })
           );
 
@@ -208,7 +223,7 @@ ${JSON.stringify(params.intent.entities, null, 2)}`,
       console.error('Error generating recommendations:', error);
       return 'Disculpá, tuve un problema generando recomendaciones. ¿Podés reformular tu consulta?';
     }
-  }
+  } 
 
   /**
    * Responde consultas sobre ingredientes y alérgenos
@@ -581,7 +596,7 @@ CONTEXTO DE LA CONVERSACIÓN:
   // ============================================================================
   // Helper functions para filtrado de menú
   // ============================================================================
-
+  
   private filterMenuByIntent(menuItems: any[], intent: IntentExtractionResult): any[] {
     return menuItems.filter(item => {
       // Filtrar por restricciones dietarias
@@ -628,10 +643,10 @@ CONTEXTO DE LA CONVERSACIÓN:
       // Filtrar por nivel de picante
       if (intent.entities.spicyLevel && item.spicyLevel) {
         const spicyLevelMap: Record<string, number> = {
-          none: 0,
-          low: 1,
-          medium: 2,
-          high: 3,
+          'nada': 0,
+          'bajo': 1,
+          'medio': 2,
+          'alto': 3,
         };
         const requestedLevel = spicyLevelMap[intent.entities.spicyLevel] ?? 1;
         const itemLevel = typeof item.spicyLevel === 'number' ? item.spicyLevel : 1;

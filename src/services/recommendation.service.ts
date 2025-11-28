@@ -32,18 +32,18 @@ import { RecommendationLogger } from '../utils/recommendation-logger';
  */
 const DEFAULT_CONFIG: RecommendationServiceConfig = {
   maxRecommendations: 3,
-  minRecommendations: 2,
+  minRecommendations: 0,      // No autocompletar, mostrar solo lo que pase filtros
   llmTimeout: 10000,
   enableAuditLogs: true,
   defaultWeights: {
-    safety: 1.0,              // CRÍTICO: 100% peso (elimina platos inseguros)
-    dietaryMatch: 0.30,       // 30% peso (aumentado desde 25%)
-    budgetFit: 0.20,          // 20% peso (aumentado desde 15%)
-    preferencesMatch: 0.30,   // 30% peso (aumentado desde 20%)
-    availability: 0.20,       // 20% peso (aumentado desde 15%)
+    safety: 1.0,              // CRÍTICO (Alerginos): [nueces, mariscos, ...]
+    dietaryMatch: 0.35,       // 35% peso [vegetariano, vegano, sin-gluten, sin-lactosa]
+    budgetFit: 0.20,          // 20% peso [min, max]
+    preferencesMatch: 0.40,   // 40% peso [tags, mealType, spicyLevel, favoriteIngredients]
+    availability: 0.05,       // 5% peso [Disponible]
   },
-  ensureDiversity: false,
-  categoryRepetitionPenalty: 0,
+  ensureDiversity: true,      // Activar diversidad por defecto
+  categoryRepetitionPenalty: 0.15, // 15% penalización por cada plato adicional de misma categoría (excepto mealType)
 };
 
 /**
@@ -76,20 +76,20 @@ export class RecommendationService {
    * Flujo:
    * 1. Obtener platos disponibles desde Firestore
    * 2. FILTRAR POR SEGURIDAD (alérgenos + dietas) - CRÍTICO
+   * 2.5. FILTRAR POR MEALTYPE (si especificado) - ESTRICTO
    * 3. Calcular scores híbridos para cada plato
    * 4. Rankear y aplicar diversidad
-   * 5. Seleccionar top 2-3
+   * 5. Seleccionar top resultados (sin autocompletar)
    * 6. Generar justificaciones personalizadas
    * 7. Log de auditoría
    * 
    * @param params Parámetros de recomendación
-   * @returns Array de 2-3 recomendaciones
+   * @returns Array de recomendaciones (cantidad variable según disponibilidad)
    */
   async generateRecommendations(
     params: RecommendationParams
   ): Promise<Recommendation[]> {
     const startTime = Date.now();
-
     try {
       // 1. Obtener todos los platos disponibles
       const allDishes = await this.menuRepository.findAllAvailable();
@@ -117,9 +117,25 @@ export class RecommendationService {
         );
       }
 
+      // 2.5. FILTRADO POR MEALTYPE - Si el usuario especificó tipo de comida
+      let filteredDishes = safetyFilter.safeDishes;
+      if (params.preferences.mealType && params.preferences.mealType.length > 0) {
+        filteredDishes = this.filterByMealType(
+          safetyFilter.safeDishes,
+          params.preferences.mealType
+        );
+
+        // Si no hay platos del mealType solicitado, informar
+        if (filteredDishes.length === 0) {
+          throw new Error(
+            `No hay ${params.preferences.mealType.join(' o ')} disponibles con tus restricciones`
+          );
+        }
+      }
+
       // 3. Calcular scores híbridos (Task #38)
       const scoredDishes = await this.calculateScores(
-        safetyFilter.safeDishes,
+        filteredDishes,
         params
       );
 
@@ -291,6 +307,87 @@ export class RecommendationService {
     return stats;
   }
 
+  /**
+   * Filtra platos por tipo de comida (mealType)
+   * 
+   * Cuando el usuario especifica "postres", "entradas", "principales", etc.
+   * solo se deben mostrar platos de ese tipo específico.
+   * 
+   * Compara mealType con el campo category del MenuItem que usa MenuCategory enum.
+   * 
+   * @param dishes Platos ya filtrados por seguridad
+   * @param mealTypes Tipos de comida solicitados (entrada, principal, postre, bebida)
+   * @returns Platos que coinciden con el mealType
+   */
+  private filterByMealType(dishes: any[], mealTypes: string[]): any[] {
+    const mealTypesLower = mealTypes.map(mt => mt.toLowerCase().trim());
+    
+    return dishes.filter(dish => {
+      const category = dish.category?.toLowerCase() || '';
+      
+      // Buscar coincidencia EXACTA con el category del plato
+      // MenuCategory enum: 'entrada', 'principal', 'postre', 'bebida', 'acompañamiento'
+      return mealTypesLower.some(mealType => {
+        // Normalizar variaciones del usuario al valor del enum
+        const normalizedMealType = this.normalizeMealType(mealType);
+        
+        // Comparación exacta con la categoría del plato
+        return category === normalizedMealType;
+      });
+    });
+  }
+
+  /**
+   * Normaliza las variaciones de mealType a los valores del MenuCategory enum
+   */
+  private normalizeMealType(mealType: string): string {
+    const normalized = mealType.toLowerCase().trim();
+    
+    // Mapeo de sinónimos a valores del enum MenuCategory
+    const mealTypeMap: Record<string, string> = {
+      // Postres
+      'postre': 'postre',
+      'postres': 'postre',
+      'dessert': 'postre',
+      'desserts': 'postre',
+      'dulce': 'postre',
+      'dulces': 'postre',
+      
+      // Entradas
+      'entrada': 'entrada',
+      'entradas': 'entrada',
+      'appetizer': 'entrada',
+      'appetizers': 'entrada',
+      'aperitivo': 'entrada',
+      'aperitivos': 'entrada',
+      'entrante': 'entrada',
+      'entrantes': 'entrada',
+      
+      // Principales
+      'principal': 'principal',
+      'principales': 'principal',
+      'main': 'principal',
+      'main course': 'principal',
+      'plato fuerte': 'principal',
+      'segundo': 'principal',
+      
+      // Bebidas
+      'bebida': 'bebida',
+      'bebidas': 'bebida',
+      'drink': 'bebida',
+      'drinks': 'bebida',
+      
+      // Acompañamientos
+      'acompañamiento': 'acompañamiento',
+      'acompañamientos': 'acompañamiento',
+      'side': 'acompañamiento',
+      'side dish': 'acompañamiento',
+      'guarnición': 'acompañamiento',
+    };
+    
+    return mealTypeMap[normalized] || normalized;
+  }
+
   // ==========================================================================
   // TASK #38: SISTEMA DE SCORING HÍBRIDO
   // ==========================================================================
@@ -436,59 +533,114 @@ export class RecommendationService {
   }
 
   /**
-   * Calcula score de preferencias
+   * Calcula score de preferencias basado en las intenciones extraídas
+   * 
+   * Usa las entidades del IntentExtractionResult para hacer matching preciso:
+   * - tags: características del plato (ligero, abundante, casero, etc)
+   * - mealType: tipo de comida (entrada, principal, postre)
+   * - spicyLevel: nivel de picante deseado
+   * - preferences: preferencias generales en texto libre
+   * - favoriteIngredients: ingredientes preferidos
    */
   private calculatePreferencesScore(
     dish: any,
     preferences: any
   ): number {
-    let score = 50; // Base neutral
+    let score = 0;
+    let maxPossibleScore = 0;
 
-    // Match de nivel de picante
-    if (preferences.spicyLevel !== undefined && dish.spicyLevel !== undefined) {
-      const spicyDiff = Math.abs(preferences.spicyLevel - dish.spicyLevel);
-      score += (3 - spicyDiff) * 5;
+    // 1. MATCH DE TAGS (peso 30%) - Características principales del plato
+    if (preferences.tags && preferences.tags.length > 0) {
+      maxPossibleScore += 30;
+      
+      if (dish.tags && dish.tags.length > 0) {
+        const dishTagsLower = dish.tags.map((t: string) => t.toLowerCase());
+        const matchingTags = preferences.tags.filter((prefTag: string) =>
+          dishTagsLower.some((dishTag: string) => 
+            dishTag.includes(prefTag.toLowerCase()) || prefTag.toLowerCase().includes(dishTag)
+          )
+        );
+        
+        // Score proporcional a tags que coinciden
+        const tagMatchRatio = matchingTags.length / preferences.tags.length;
+        score += tagMatchRatio * 30;
+      }
     }
 
-    // Match de tags de preferencias (NUEVO)
-    if (preferences.tags && preferences.tags.length > 0 && dish.tags && dish.tags.length > 0) {
-      const dishTagsLower = dish.tags.map((t: string) => t.toLowerCase());
-      const matchingTags = preferences.tags.filter((prefTag: string) =>
-        dishTagsLower.some((dishTag: string) => dishTag.includes(prefTag.toLowerCase()))
-      );
-      // Cada tag que coincide suma puntos
-      const tagMatchRatio = matchingTags.length / preferences.tags.length;
-      score += tagMatchRatio * 30; // Hasta 30 puntos por tags
-    }
-
-    // Match de tipo de comida y categorías - basado en descripción y nombre del plato
-    // El LLM debe extraer características semánticas, no comparar strings de categorías
+    // 2. MATCH DE TIPO DE COMIDA (peso 25%) - entrada, principal, postre, bebida
     if (preferences.mealType && preferences.mealType.length > 0) {
+      maxPossibleScore += 25;
+      
       const dishText = `${dish.name} ${dish.description} ${dish.category}`.toLowerCase();
-      const matchesType = preferences.mealType.some((type: string) =>
-        dishText.includes(type.toLowerCase())
+      const matchingTypes = preferences.mealType.filter((type: string) =>
+        dishText.includes(type.toLowerCase()) || dish.category?.toLowerCase().includes(type.toLowerCase())
       );
-      if (matchesType) score += 10;
+      
+      if (matchingTypes.length > 0) {
+        const typeMatchRatio = matchingTypes.length / preferences.mealType.length;
+        score += typeMatchRatio * 25;
+      }
     }
 
-    // Categorías preferidas - matching semántico
-    if (preferences.preferredCategories && preferences.preferredCategories.length > 0) {
-      const dishText = `${dish.name} ${dish.description} ${dish.category}`.toLowerCase();
-      const matchesPreference = preferences.preferredCategories.some((pref: string) =>
-        dishText.includes(pref.toLowerCase())
-      );
-      if (matchesPreference) score += 10;
+    // 3. MATCH DE NIVEL DE PICANTE (peso 20%) - Exactitud en spicyLevel
+    if (preferences.spicyLevel !== undefined) {
+      maxPossibleScore += 20;
+      
+      if (dish.spicyLevel !== undefined) {
+        const spicyDiff = Math.abs(preferences.spicyLevel - dish.spicyLevel);
+        // Score inverso a la diferencia: 0 diff = 20 pts, 1 diff = 15 pts, 2 diff = 10 pts, 3+ diff = 5 pts
+        const spicyScore = Math.max(20 - (spicyDiff * 5), 5);
+        score += spicyScore;
+      } else {
+        // Si el plato no tiene spicyLevel definido, asumir nivel medio (1)
+        const spicyDiff = Math.abs(preferences.spicyLevel - 1);
+        const spicyScore = Math.max(20 - (spicyDiff * 5), 5);
+        score += spicyScore;
+      }
     }
 
-    // Ingredientes favoritos
+    // 4. INGREDIENTES FAVORITOS (peso 15%) - Boost por ingredientes deseados
     if (preferences.favoriteIngredients && preferences.favoriteIngredients.length > 0) {
-      const matchesFavorite = preferences.favoriteIngredients.some((ing: string) =>
-        dish.description?.toLowerCase().includes(ing.toLowerCase())
-      );
-      if (matchesFavorite) score += 20;
+      maxPossibleScore += 15;
+      
+      if (dish.description || dish.ingredients) {
+        const dishContent = `${dish.description || ''} ${dish.ingredients?.join(' ') || ''}`.toLowerCase();
+        const matchingIngredients = preferences.favoriteIngredients.filter((ing: string) =>
+          dishContent.includes(ing.toLowerCase())
+        );
+        
+        if (matchingIngredients.length > 0) {
+          const ingredientMatchRatio = matchingIngredients.length / preferences.favoriteIngredients.length;
+          score += ingredientMatchRatio * 15;
+        }
+      }
     }
 
-    return Math.min(100, Math.max(0, score));
+    // 5. CATEGORÍAS PREFERIDAS (peso 10%) - Match de categoría del menú
+    if (preferences.preferredCategories && preferences.preferredCategories.length > 0) {
+      maxPossibleScore += 10;
+      
+      if (dish.category) {
+        const categoryMatch = preferences.preferredCategories.some((pref: string) =>
+          dish.category.toLowerCase().includes(pref.toLowerCase()) ||
+          pref.toLowerCase().includes(dish.category.toLowerCase())
+        );
+        
+        if (categoryMatch) {
+          score += 10;
+        }
+      }
+    }
+
+    // Normalizar a escala 0-100
+    if (maxPossibleScore === 0) {
+      // Sin preferencias definidas, retornar score neutral alto
+      return 70;
+    }
+
+    // Convertir a porcentaje y ajustar para que un buen match de 80%+ sea ~90-100
+    const normalizedScore = (score / maxPossibleScore) * 100;
+    return Math.min(100, Math.max(0, normalizedScore));
   }
 
   /**
@@ -516,10 +668,10 @@ export class RecommendationService {
    * Rankea platos y aplica algoritmo de diversidad
    * 
    * Garantiza:
-   * - Top scores tienen prioridad
-   * - Diversidad en categorías
-   * - Diversidad en rangos de precio
-   * - No más de 2 platos de la misma categoría
+   * - Top scores tienen prioridad SIEMPRE
+   * - Diversidad en categorías (opcional) - NO aplica a mealType
+   * - No más de 2 platos de la misma categoría si diversity habilitado
+   * - NO autocompleta, muestra solo lo disponible
    * 
    * @param scoredDishes Platos con scores
    * @param maxRecommendations Máximo de recomendaciones
@@ -530,45 +682,71 @@ export class RecommendationService {
     maxRecommendations: number
   ): RankingResult {
     if (!this.config.ensureDiversity) {
-      // Sin diversidad, simplemente tomar los top
+      // Sin diversidad, simplemente tomar los top por score
       return {
         rankedDishes: scoredDishes.slice(0, maxRecommendations),
-        diversityMetrics: this.calculateDiversityMetrics([]),
+        diversityMetrics: this.calculateDiversityMetrics(scoredDishes.slice(0, maxRecommendations).map(s => s.dish)),
         discardedForDiversity: [],
       };
     }
 
-    // VARIEDAD: Tomar de un pool más amplio con aleatoriedad ponderada
-    // Los mejores scores tienen más probabilidad, pero hay variación
-    const topCandidatesCount = Math.min(Math.max(maxRecommendations * 4, 10), scoredDishes.length);
-    const topCandidates = scoredDishes.slice(0, topCandidatesCount);
+    // CON DIVERSIDAD: Aplicar penalización por repetición de categoría
+    // pero NO a categorías que son mealType (entrada, principal, postre, bebida)
+    type ScoredDishWithAdjustment = typeof scoredDishes[0] & {
+      adjustedScore: number;
+      originalScore: number;
+      categoryPenalty: number;
+    };
     
-    // Aplicar pequeña aleatoriedad ponderada por score
-    const withRandomness = topCandidates.map(item => ({
-      ...item,
-      adjustedScore: item.totalScore * (0.85 + Math.random() * 0.3) // 85%-115% del score original
-    }));
-    
-    // Re-ordenar por score ajustado
-    withRandomness.sort((a, b) => b.adjustedScore - a.adjustedScore);
-
-    const selected: typeof scoredDishes = [];
+    const selected: ScoredDishWithAdjustment[] = [];
     const discarded: Array<{ dish: any; reason: string }> = [];
     const categoryCounts: Record<string, number> = {};
+    
+    // Categorías que NO deben penalizarse (son mealTypes)
+    const mealTypeCategories = ['entrada', 'principal', 'postre', 'bebida', 'appetizer', 'main', 'dessert', 'drink'];
 
-    for (const item of withRandomness) {
+    // Crear una copia con scores ajustados por penalización de categoría
+    const adjustedScores: ScoredDishWithAdjustment[] = scoredDishes.map(item => {
+      const category = item.dish.category?.toLowerCase() || '';
+      const categoryCount = categoryCounts[category] || 0;
+      
+      // NO aplicar penalización si es un mealType
+      const isMealType = mealTypeCategories.some(mt => category.includes(mt));
+      
+      // Aplicar penalización solo si NO es mealType y ya hay platos de esta categoría
+      const penalty = isMealType ? 0 : categoryCount * this.config.categoryRepetitionPenalty;
+      const adjustedScore = item.totalScore * (1 - penalty);
+      
+      return {
+        ...item,
+        adjustedScore,
+        originalScore: item.totalScore,
+        categoryPenalty: penalty,
+      };
+    });
+
+    // Re-ordenar por score ajustado (determinista)
+    adjustedScores.sort((a, b) => b.adjustedScore - a.adjustedScore);
+
+    // Seleccionar los mejores con límite de categoría (solo para categorías NO-mealType)
+    for (const item of adjustedScores) {
       if (selected.length >= maxRecommendations) break;
 
-      const category = item.dish.category;
+      const category = item.dish.category?.toLowerCase() || '';
       const categoryCount = categoryCounts[category] || 0;
+      const isMealType = mealTypeCategories.some(mt => category.includes(mt));
 
-      // Verificar diversidad de categorías
-      if (categoryCount >= 2) {
-        discarded.push({
-          dish: item.dish,
-          reason: `Demasiados platos de categoría "${category}"`,
-        });
-        continue;
+      // Verificar límite de categoría (2 platos máximo) SOLO para categorías que NO son mealType
+      if (!isMealType && categoryCount >= 2 && selected.length < maxRecommendations) {
+        // Si el score es muy superior, permitir excepción
+        const scoreDifference = item.adjustedScore - (selected[selected.length - 1]?.adjustedScore || 0);
+        if (scoreDifference < 20) {
+          discarded.push({
+            dish: item.dish,
+            reason: `Límite de categoría "${category}" alcanzado (2 platos máximo)`,
+          });
+          continue;
+        }
       }
 
       // Agregar a seleccionados
@@ -576,14 +754,8 @@ export class RecommendationService {
       categoryCounts[category] = categoryCount + 1;
     }
 
-    // Si no llegamos al mínimo, relajar restricciones
-    if (selected.length < this.config.minRecommendations) {
-      const needed = this.config.minRecommendations - selected.length;
-      const remaining = scoredDishes.filter(
-        item => !selected.includes(item)
-      ).slice(0, needed);
-      selected.push(...remaining);
-    }
+    // NO autocompletar - mostrar solo lo que pasó los filtros de diversidad
+    // Eliminado el bloque de minRecommendations
 
     return {
       rankedDishes: selected,
@@ -679,7 +851,8 @@ export class RecommendationService {
   /**
    * Genera justificación personalizada para una recomendación
    * 
-   * Task #44: Usa el LLM para generar justificaciones más naturales y personalizadas
+   * Task #44: Genera justificaciones basadas en las intenciones extraídas
+   * Usa scoreBreakdown para identificar las razones más fuertes del match
    */
   private async generateJustification(
     dish: any,
@@ -688,58 +861,89 @@ export class RecommendationService {
   ): Promise<string> {
     const reasons: string[] = [];
 
-    // TODO: Task #43 - Usar LLM para justificaciones más naturales y context-aware
-
-    // Razones principales
-    if (params.dietaryRestrictions.length > 0) {
-      if (dish.isVegan) {
-        reasons.push('es 100% vegano');
-      } else if (dish.isVegetarian) {
-        reasons.push('es vegetariano');
+    // 1. RAZONES DE RESTRICCIONES DIETARIAS (si aplican y tienen buen score)
+    if (scoreBreakdown.dietaryMatch >= 90 && params.dietaryRestrictions.length > 0) {
+      const dietaryReasons: string[] = [];
+      
+      if (dish.isVegan && params.dietaryRestrictions.some(r => r.toLowerCase().includes('vegan'))) {
+        dietaryReasons.push('100% vegano');
+      } else if (dish.isVegetarian && params.dietaryRestrictions.some(r => r.toLowerCase().includes('vegetarian'))) {
+        dietaryReasons.push('vegetariano');
       }
-      if (dish.isGlutenFree) {
-        reasons.push('no contiene gluten');
+      
+      if (dish.isGlutenFree && params.dietaryRestrictions.some(r => r.toLowerCase().includes('gluten'))) {
+        dietaryReasons.push('sin gluten');
       }
-      if (dish.isLactoseFree) {
-        reasons.push('no contiene lactosa');
+      
+      if (dish.isLactoseFree && params.dietaryRestrictions.some(r => r.toLowerCase().includes('lactos'))) {
+        dietaryReasons.push('sin lactosa');
+      }
+      
+      if (dietaryReasons.length > 0) {
+        reasons.push(dietaryReasons.join(' y '));
       }
     }
 
-    // Razón de presupuesto
-    if (params.budget && scoreBreakdown.budgetFit >= 90) {
+    // 2. RAZONES DE PREFERENCIAS (tags, características)
+    if (scoreBreakdown.preferencesMatch >= 70 && params.preferences.tags && params.preferences.tags.length > 0) {
+      if (dish.tags && dish.tags.length > 0) {
+        const dishTagsLower = dish.tags.map((t: string) => t.toLowerCase());
+        const matchingTags = params.preferences.tags.filter((prefTag: string) =>
+          dishTagsLower.some((dishTag: string) => 
+            dishTag.includes(prefTag.toLowerCase()) || prefTag.toLowerCase().includes(dishTag)
+          )
+        );
+        
+        if (matchingTags.length > 0) {
+          const tagDescription = matchingTags.slice(0, 2).join(' y '); // Máximo 2 tags en la justificación
+          reasons.push(`es ${tagDescription}`);
+        }
+      }
+    }
+
+    // 3. RAZÓN DE PRESUPUESTO (si está dentro del rango)
+    if (scoreBreakdown.budgetFit >= 90 && params.budget) {
       reasons.push(`se ajusta perfecto a tu presupuesto ($${dish.price})`);
+    } else if (scoreBreakdown.budgetFit >= 70 && params.budget) {
+      reasons.push(`tiene excelente relación precio-calidad ($${dish.price})`);
     }
 
-    // Razón de preferencias con tags (NUEVO)
-    if (params.preferences.tags && params.preferences.tags.length > 0 && dish.tags && dish.tags.length > 0) {
-      const dishTagsLower = dish.tags.map((t: string) => t.toLowerCase());
-      const matchingTags = params.preferences.tags.filter((prefTag: string) =>
-        dishTagsLower.some((dishTag: string) => dishTag.includes(prefTag.toLowerCase()))
-      );
-      if (matchingTags.length > 0) {
-        reasons.push(`es ${matchingTags.join(', ')}`);
+    // 4. INGREDIENTES FAVORITOS (si coinciden)
+    if (params.preferences.favoriteIngredients && params.preferences.favoriteIngredients.length > 0) {
+      if (dish.description || dish.ingredients) {
+        const dishContent = `${dish.description || ''} ${dish.ingredients?.join(' ') || ''}`.toLowerCase();
+        const matchingIngredients = params.preferences.favoriteIngredients.filter((ing: string) =>
+          dishContent.includes(ing.toLowerCase())
+        );
+        
+        if (matchingIngredients.length > 0) {
+          const ingredientList = matchingIngredients.slice(0, 2).join(' y ');
+          reasons.push(`tiene ${ingredientList} que te gustan`);
+        }
       }
     }
 
-    // Razón de preferencias generales
-    if (scoreBreakdown.preferencesMatch >= 80) {
-      reasons.push('coincide con tus preferencias');
+    // 5. NIVEL DE PICANTE (si es exacto)
+    if (params.preferences.spicyLevel !== undefined && dish.spicyLevel !== undefined) {
+      const spicyDiff = Math.abs(params.preferences.spicyLevel - dish.spicyLevel);
+      if (spicyDiff === 0) {
+        const spicyLabels = ['nada picante', 'levemente picante', 'picante moderado', 'muy picante'];
+        reasons.push(`es ${spicyLabels[dish.spicyLevel]} como preferís`);
+      }
     }
 
-    // Características específicas del plato
-    if (dish.spicyLevel === 0 && params.preferences.spicyLevel === 0) {
-      reasons.push('es suave como buscás');
-    }
-
+    // Construir justificación
     if (reasons.length === 0) {
-      return `${dish.name} es una excelente opción por su calidad y sabor. ${dish.description}`;
+      // Justificación genérica basada en el plato
+      return `${dish.name} es una excelente opción del menú. ${dish.description || ''}`;
     }
 
-    // Construir justificación con contexto
-    let justification = `Te recomiendo ${dish.name} porque ${reasons.join(', ')}.`;
+    // Justificación personalizada con hasta 3 razones principales
+    const topReasons = reasons.slice(0, 3);
+    let justification = `Te recomiendo ${dish.name} porque ${topReasons.join(', ')}.`;
     
-    // Agregar descripción si hay espacio
-    if (dish.description && dish.description.length < 100) {
+    // Agregar descripción del plato si es corta y relevante
+    if (dish.description && dish.description.length < 80 && !justification.toLowerCase().includes(dish.description.toLowerCase())) {
       justification += ` ${dish.description}`;
     }
 
