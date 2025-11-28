@@ -208,7 +208,7 @@ const ChatContainer: React.FC<ChatContainerProps> = ({ className = "" }) => {
     setCartUpdateTrigger(prev => prev + 1);
     
     // Mensaje automático de confirmación
-    const message = `He agregado "${item.name}" al pedido. ¡Genial elección!`;
+    const message = `Agrega "${item.name}" al pedido. ¡Gracias!`;
     handleSendMessage(message);
   };
 

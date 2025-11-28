@@ -129,23 +129,29 @@ const DishCard: React.FC<DishCardProps> = ({
 
         {/* Botones de acción según variante */}
         <div className="mt-auto">
-          {variant === 'chat' && menuItem.available ? (
+          {variant === 'chat' && menuItem.available && (onInterested || onViewAlternatives) ? (
             <div className="space-y-2">
               {/* Botones principales para chat */}
-              <div className="flex gap-2">
-                <button
-                  onClick={handleInterested}
-                  className="flex-1 bg-accent-blue text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors"
-                >
-                  Me interesa
-                </button>
-                <button
-                  onClick={handleViewAlternatives}
-                  className="flex-1 bg-gray-500 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-gray-600 transition-colors"
-                >
-                  Ver alternativas
-                </button>
-              </div>
+              {(onInterested || onViewAlternatives) && (
+                <div className="flex gap-2">
+                  {onInterested && (
+                    <button
+                      onClick={handleInterested}
+                      className="flex-1 bg-accent-blue text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-blue-600 transition-colors"
+                    >
+                      Me interesa
+                    </button>
+                  )}
+                  {onViewAlternatives && (
+                    <button
+                      onClick={handleViewAlternatives}
+                      className="flex-1 bg-gray-500 text-white py-2 px-3 rounded-lg text-xs font-medium hover:bg-gray-600 transition-colors"
+                    >
+                      Ver alternativas
+                    </button>
+                  )}
+                </div>
+              )}
               {/* Botón agregar al carrito */}
               {showAddButton && (
                 <button

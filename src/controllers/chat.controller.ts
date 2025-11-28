@@ -587,7 +587,8 @@ export class ChatController {
         sessionId: session.id, // Usar el ID real de la sesión
         actions,
         recommendations, // 2-3 platos recomendados con justificaciones
-        metadata
+        metadata,
+        autoAddedToCart // Agregar flag para indicar si fue agregado automáticamente
       };
 
       // 6. Guardar mensajes en la sesión

@@ -1,10 +1,10 @@
 import { Check, CheckCheck, Clock } from 'lucide-react';
 import { useEffect } from 'react';
+import muzziniAvatar from '../chefcito.jpg';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import { ChatMessage, MenuItem } from '../types';
 import FoodCarousel from './FoodCarousel';
 import { VoiceOutputButton } from './VoiceOutputButton';
-import muzziniAvatar from '../chefcito.jpg';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -125,6 +125,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               onViewAlternatives={onViewAlternatives}
               title="Recomendaciones"
               variant="chat"
+              confirmationOnly={message.autoAddedToCart}
             />
           </div>
         )}

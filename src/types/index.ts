@@ -32,6 +32,7 @@ export interface ChatMessage {
   status: 'sending' | 'sent' | 'delivered' | 'read';
   menuItems?: MenuItem[]; // Para recomendaciones de platos
   isTyping?: boolean;
+  autoAddedToCart?: boolean; // Indica si los items fueron agregados automáticamente
 }
 
 // Tipos para las sesiones de conversación

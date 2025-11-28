@@ -13,6 +13,7 @@ interface FoodCarouselProps {
   title?: string;
   className?: string;
   variant?: 'default' | 'chat';
+  confirmationOnly?: boolean;
 }
 
 /**
@@ -22,17 +23,6 @@ const isRecommendedItem = (item: MenuItem): item is RecommendedMenuItem => {
   return 'score' in item && typeof (item as any).score === 'number';
 };
 
-interface FoodCarouselProps {
-  items: MenuItem[];
-  onItemClick?: (item: MenuItem) => void;
-  onAddToCart?: (item: MenuItem) => void;
-  onInterested?: (item: MenuItem) => void;
-  onViewAlternatives?: (item: MenuItem) => void;
-  title?: string;
-  className?: string;
-  variant?: 'default' | 'chat';
-}
-
 const FoodCarousel: React.FC<FoodCarouselProps> = ({
   items,
   onItemClick,
@@ -41,7 +31,8 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
   onViewAlternatives,
   title = "Recomendaciones",
   className = "",
-  variant = 'default'
+  variant = 'default',
+  confirmationOnly = false,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -138,6 +129,7 @@ const FoodCarousel: React.FC<FoodCarouselProps> = ({
                   onViewAlternatives={onViewAlternatives}
                   variant={variant}
                   className="h-full"
+                  confirmationOnly={confirmationOnly}
                 />
               ) : (
                 <DishCard

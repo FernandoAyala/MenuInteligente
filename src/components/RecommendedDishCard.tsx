@@ -30,6 +30,8 @@ interface RecommendedDishCardProps {
   variant?: 'default' | 'chat';
   /** Mostrar score expandido por defecto */
   defaultExpanded?: boolean;
+  /** Solo mostrar confirmación (sin botones interactivos ni texto de recomendación) */
+  confirmationOnly?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ const RecommendedDishCard: React.FC<RecommendedDishCardProps> = ({
   className = '',
   variant = 'default',
   defaultExpanded = false,
+  confirmationOnly = false,
 }) => {
   const [showReason, setShowReason] = useState(defaultExpanded);
 
@@ -74,6 +77,7 @@ const RecommendedDishCard: React.FC<RecommendedDishCardProps> = ({
    * Obtener texto descriptivo del score
    */
   const getScoreLabel = (score: number): string => {
+    console.log('Normalized Score:', score);
     if (score >= 0.9) return 'Altamente recomendado';
     if (score >= 0.8) return 'Muy recomendado';
     if (score >= 0.7) return 'Recomendado';
@@ -83,6 +87,8 @@ const RecommendedDishCard: React.FC<RecommendedDishCardProps> = ({
 
   const starRating = getStarRating(normalizedScore);
   const scorePercentage = Math.round(normalizedScore * 100);
+  const calculatedPercentage = Math.abs(scorePercentage - 100);
+  const displayPercentage = calculatedPercentage === 0 ? 100 : calculatedPercentage;
 
   const handleClick = () => {
     if (onClick) {
@@ -96,38 +102,40 @@ const RecommendedDishCard: React.FC<RecommendedDishCardProps> = ({
       onClick={handleClick}
     >
       {/* Badge de confianza en la parte superior */}
-      <div className="bg-gradient-to-r from-green-50 to-blue-50 px-3 py-2 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div
-              className={`px-2 py-1 rounded-full text-xs font-semibold border ${getScoreColor(
-                normalizedScore
-              )} flex items-center gap-1`}
-            >
-              <Star className="w-3 h-3 fill-current" />
-              <span>{scorePercentage}%</span>
+      {!confirmationOnly && (
+        <div className="bg-gradient-to-r from-green-50 to-blue-50 px-3 py-2 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div
+                className={`px-2 py-1 rounded-full text-xs font-semibold border ${getScoreColor(
+                  normalizedScore
+                )} flex items-center gap-1`}
+              >
+                <Star className="w-3 h-3 fill-current" />
+                <span>{displayPercentage}%</span>
+              </div>
+              <span className="text-xs text-gray-700 font-medium">{getScoreLabel(normalizedScore)}</span>
             </div>
-            <span className="text-xs text-gray-700 font-medium">{getScoreLabel(normalizedScore)}</span>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Tarjeta base (DishCard) - sin el wrapper clickeable */}
       <div className="relative">
         <DishCard
           menuItem={menuItem}
           onClick={undefined}
-          showAddButton={showAddButton}
-          onAddToCart={onAddToCart}
-          onInterested={onInterested}
-          onViewAlternatives={onViewAlternatives}
+          showAddButton={confirmationOnly ? false : showAddButton}
+          onAddToCart={confirmationOnly ? undefined : onAddToCart}
+          onInterested={confirmationOnly ? undefined : onInterested}
+          onViewAlternatives={confirmationOnly ? undefined : onViewAlternatives}
           variant={variant}
           className="pb-0 rounded-none border-0 shadow-none hover:shadow-none"
         />
       </div>
 
       {/* Sección de explicación (dentro de la tarjeta) */}
-      {menuItem.reason && (
+      {!confirmationOnly && menuItem.reason && (
         <div className="bg-white border-t border-gray-200">
           {/* Header colapsable */}
           <button

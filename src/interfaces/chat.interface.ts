@@ -147,6 +147,7 @@ export interface ChatResponse {
     itemCount: number;
   };
   metadata: ChatResponseMetadata;
+  autoAddedToCart?: boolean; // Indica si los items fueron agregados automáticamente al carrito
 }
 
 /**
@@ -557,6 +558,7 @@ export function isChatAction(obj: any): obj is ChatAction {
 // ============================================================================
 
 export type {
-  MenuItem,
-  Recommendation,
+    MenuItem,
+    Recommendation
 };
+

@@ -141,6 +141,11 @@ export function useChatService(options: UseChatServiceOptions = {}) {
       }));
     }
     
+    // Extraer autoAddedToCart del response
+    const autoAddedToCart = 'autoAddedToCart' in response 
+      ? Boolean(response.autoAddedToCart) 
+      : undefined;
+    
     return {
       id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       content,
@@ -148,6 +153,7 @@ export function useChatService(options: UseChatServiceOptions = {}) {
       timestamp,
       status: 'sent',
       menuItems,
+      autoAddedToCart,
     };
   }, []);
 
